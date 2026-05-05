@@ -8,8 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:setup": "prisma db push && npx prisma db seed",
     "postinstall": "prisma generate"
   },
   "prisma": {
