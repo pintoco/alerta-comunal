@@ -52,7 +52,6 @@ Crea un archivo `.env` en la raíz:
 DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/alertacomunal"
 JWT_SECRET="genera-un-secreto-seguro-con-openssl-rand-base64-32"
 APP_URL="http://localhost:3000"
-NODE_ENV="development"
 ```
 
 ### 3. Inicializar base de datos
@@ -86,7 +85,6 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `DATABASE_URL` | URL de conexión PostgreSQL | `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | Secreto para firmar tokens JWT | Cadena aleatoria de 32+ caracteres |
 | `APP_URL` | URL base de la aplicación | `http://localhost:3000` |
-| `NODE_ENV` | Entorno de ejecución | `development` / `production` |
 
 ## Comandos disponibles
 
@@ -127,8 +125,9 @@ En **Variables** del servicio agrega:
 ```
 JWT_SECRET=<genera con: openssl rand -base64 32>
 APP_URL=https://tu-app.up.railway.app
-NODE_ENV=production
 ```
+
+> **No agregar `NODE_ENV`** como variable de servicio. Railway inyecta un valor no estándar que confunde a Next.js. El script de build ya incluye `NODE_ENV=production next build` para forzar el modo correcto.
 
 ### Paso 5: Configurar comandos en Railway Settings
 
@@ -198,6 +197,7 @@ alerta-comunal/
 - **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import.
 - **Prisma en cliente:** `utils.ts` no importa Prisma. La función `generateEmergencyCode()` vive en `generate-code.ts` (server-only) para evitar bundling issues.
 - **DB en Railway:** Se usa `prisma db push` en lugar de `prisma migrate deploy`, ya que no se generan archivos de migración localmente.
+- **NODE_ENV en Railway:** Railway inyecta un valor no estándar en `NODE_ENV` durante el build, lo que hace que Next.js use el runtime de desarrollo y crashee en el pre-rendering. El build script usa `NODE_ENV=production next build` para forzar el runtime de producción correcto. No configurar `NODE_ENV` como variable de servicio en Railway.
 
 ## Roadmap (post-MVP)
 
