@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import MainLayout from '@/components/layout/MainLayout'
 import EmergencyForm from '@/components/emergencies/EmergencyForm'
 
+export const dynamic = 'force-dynamic'
+
 export default async function EditarEmergenciaPage({
   params,
 }: {

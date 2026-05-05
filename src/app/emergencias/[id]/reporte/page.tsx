@@ -9,6 +9,8 @@ import {
 } from '@/lib/utils'
 import PrintButtons from '@/components/emergencies/PrintButtons'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ReportePage({
   params,
 }: {

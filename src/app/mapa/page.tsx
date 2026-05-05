@@ -1,6 +1,8 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 import MainLayout from '@/components/layout/MainLayout'
 import MapWrapper from '@/components/map/MapWrapper'
 import type { Emergency } from '@/types'

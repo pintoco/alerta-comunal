@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
+
+export const dynamic = 'force-dynamic'
 import EmergencyTable from '@/components/emergencies/EmergencyTable'
 import EmergencyFilters from '@/components/emergencies/EmergencyFilters'
 import { Suspense } from 'react'
