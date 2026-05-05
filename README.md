@@ -2,18 +2,22 @@
 
 Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seguimiento de emergencias comunales.
 
+**Demo en vivo:** [https://alerta-comunal-production.up.railway.app](https://alerta-comunal-production.up.railway.app)
+
 ## Stack tecnológico
 
-- **Framework:** Next.js 15 (App Router)
-- **Lenguaje:** TypeScript
-- **UI:** React 18 + Tailwind CSS 3
-- **Base de datos:** PostgreSQL + Prisma ORM
-- **Autenticación:** JWT con jose (cookies httpOnly)
-- **Mapas:** Leaflet + React-Leaflet + OpenStreetMap
-- **Validaciones:** Zod + React Hook Form
-- **Deploy:** Railway
+| Capa | Tecnología |
+|------|-----------|
+| Framework | Next.js 15 (App Router) |
+| Lenguaje | TypeScript |
+| UI | React 18 + Tailwind CSS 3 |
+| Base de datos | PostgreSQL + Prisma ORM |
+| Autenticación | JWT con jose (cookies httpOnly) |
+| Mapas | Leaflet + React-Leaflet + OpenStreetMap |
+| Validaciones | Zod + React Hook Form |
+| Deploy | Railway |
 
-## Funcionalidades principales
+## Funcionalidades
 
 - Login seguro con roles (ADMIN, OPERADOR, VISUALIZADOR)
 - Dashboard con estadísticas en tiempo real
@@ -21,65 +25,53 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 - Mapa interactivo con marcadores por prioridad
 - Subida de evidencias fotográficas
 - Gestión de tareas por emergencia
-- Formulario ciudadano público (sin login)
-- Reporte imprimible por emergencia
+- Formulario ciudadano público en `/reportar` (sin login)
+- Reporte imprimible y exportable a PDF por emergencia
 - Historial de actividad
 - Filtros avanzados de búsqueda
 
 ## Instalación local
 
-### 1. Prerequisitos
+### Prerequisitos
 - Node.js 18+
 - PostgreSQL 14+
 
-### 2. Clonar e instalar
+### 1. Clonar e instalar
 
 ```bash
-git clone https://github.com/tu-usuario/alerta-comunal.git
+git clone https://github.com/pintoco/alerta-comunal.git
 cd alerta-comunal
 npm install
 ```
 
-### 3. Configurar variables de entorno
+### 2. Variables de entorno
 
-```bash
-cp .env.example .env
-```
-
-Edita `.env` con tus valores:
+Crea un archivo `.env` en la raíz:
 
 ```env
 DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/alertacomunal"
 JWT_SECRET="genera-un-secreto-seguro-con-openssl-rand-base64-32"
 APP_URL="http://localhost:3000"
+NODE_ENV="development"
 ```
 
-### 4. Crear base de datos y migrar
+### 3. Inicializar base de datos
 
 ```bash
-# Crear la base de datos en PostgreSQL primero
-createdb alertacomunal
+# Crear tablas desde el schema (sin archivos de migración)
+npx prisma db push
 
-# Ejecutar migraciones
-npx prisma migrate dev --name init
-
-# Generar cliente
-npm run prisma:generate
-```
-
-### 5. Ejecutar seed (datos iniciales)
-
-```bash
+# Cargar datos iniciales (admin + usuarios + emergencias de ejemplo)
 npm run prisma:seed
 ```
 
-### 6. Crear carpeta de uploads
+### 4. Crear carpeta de uploads
 
 ```bash
 mkdir -p public/uploads
 ```
 
-### 7. Iniciar en desarrollo
+### 5. Iniciar en desarrollo
 
 ```bash
 npm run dev
@@ -96,133 +88,124 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `APP_URL` | URL base de la aplicación | `http://localhost:3000` |
 | `NODE_ENV` | Entorno de ejecución | `development` / `production` |
 
-## Comandos
+## Comandos disponibles
 
 ```bash
-npm run dev           # Desarrollo con hot-reload
-npm run build         # Build para producción
-npm run start         # Iniciar servidor de producción
-npm run lint          # Verificar código
+npm run dev               # Desarrollo con hot-reload
+npm run build             # Build para producción
+npm run start             # Iniciar servidor de producción
+npm run lint              # Verificar código
 npm run prisma:generate   # Generar cliente Prisma
-npm run prisma:migrate    # Aplicar migraciones en producción
+npm run prisma:push       # Sincronizar schema con la DB (sin migraciones)
 npm run prisma:seed       # Cargar datos de ejemplo
+npm run prisma:setup      # prisma db push + seed (todo en uno)
 ```
 
 ## Deploy en Railway
 
-### Paso 1: Preparar el repositorio
+### Paso 1: Repositorio GitHub
 
 ```bash
-git init
-git add .
-git commit -m "feat: MVP inicial AlertaComunal"
-git remote add origin https://github.com/tu-usuario/alerta-comunal.git
-git push -u origin main
+git clone https://github.com/pintoco/alerta-comunal.git
 ```
 
 ### Paso 2: Crear proyecto en Railway
 
-1. Ve a [railway.app](https://railway.app) y crea una cuenta
-2. Haz clic en **New Project**
-3. Selecciona **Deploy from GitHub repo**
-4. Selecciona el repositorio `alerta-comunal`
+1. Ve a [railway.app](https://railway.app)
+2. **New Project** → **Deploy from GitHub repo** → selecciona `alerta-comunal`
 
 ### Paso 3: Agregar PostgreSQL
 
-1. En el proyecto Railway, haz clic en **New** → **Database** → **PostgreSQL**
-2. Copia la variable `DATABASE_URL` que Railway genera automáticamente
+En el proyecto Railway: **New** → **Database** → **PostgreSQL**
 
-### Paso 4: Configurar variables de entorno en Railway
+Railway vincula automáticamente la variable `DATABASE_URL` al servicio.
 
-En la sección **Variables** de tu servicio, agrega:
+### Paso 4: Variables de entorno
+
+En **Variables** del servicio agrega:
 
 ```
-DATABASE_URL=<copiado de PostgreSQL>
 JWT_SECRET=<genera con: openssl rand -base64 32>
-APP_URL=https://tu-app.railway.app
+APP_URL=https://tu-app.up.railway.app
 NODE_ENV=production
 ```
 
-### Paso 5: Configurar comandos en Railway
-
-En la sección **Settings** de tu servicio:
-
-- **Build Command:** `npm run build`
-- **Start Command:** `npm run start`
-- **Install Command:** `npm install`
-
-> **Nota:** El `postinstall` ejecuta `prisma generate` automáticamente.
-
-### Paso 6: Ejecutar migraciones
-
-En la terminal de Railway o como Release Command:
-
-```bash
-npx prisma migrate deploy && npx prisma db seed
-```
-
-O configúralo como **Release Command** en Railway Settings.
-
-### Paso 7: Deploy
-
-Railway detectará el push y ejecutará el deploy automáticamente. El primer deploy puede tardar 2-5 minutos.
-
-## Usuario demo
+### Paso 5: Configurar comandos en Railway Settings
 
 | Campo | Valor |
 |-------|-------|
-| Email | `ppinto@elementalpro.cl` |
-| Contraseña | `Admin123456` |
-| Rol | ADMIN |
+| Build Command | `npm run build` |
+| Start Command | `npm run start` |
+| Release Command | `npx prisma db push && npx prisma db seed` |
 
-**Usuarios operadores:**
-- `mgonzalez@alertacomunal.cl` / `Operador123`
-- `cmartinez@alertacomunal.cl` / `Operador123`
+> El `postinstall` ejecuta `prisma generate` automáticamente al hacer `npm install`.
 
-**Formulario ciudadano público:** `/reportar` (sin login)
+### Paso 6: Deploy
+
+Railway detecta el push a `main` y despliega automáticamente. El primer deploy tarda ~2-4 minutos.
+
+## Usuarios demo
+
+| Email | Contraseña | Rol |
+|-------|-----------|-----|
+| `ppinto@elementalpro.cl` | `Admin123456` | ADMIN |
+| `mgonzalez@alertacomunal.cl` | `Operador123` | OPERADOR |
+| `cmartinez@alertacomunal.cl` | `Operador123` | OPERADOR |
+
+**Formulario ciudadano público:** `/reportar` (no requiere login)
 
 ## Estructura del proyecto
 
 ```
 alerta-comunal/
 ├── prisma/
-│   ├── schema.prisma      # Modelos de datos
-│   └── seed.ts            # Datos iniciales
+│   ├── schema.prisma          # Modelos: User, Emergency, Task, Evidence, ActivityLog...
+│   └── seed.ts                # Admin + operadores + emergencias de ejemplo
 ├── public/
-│   └── uploads/           # Imágenes subidas (gitignored)
+│   └── uploads/               # Imágenes subidas localmente (gitignored)
 ├── src/
 │   ├── app/
-│   │   ├── api/           # API Routes (REST)
-│   │   ├── dashboard/     # Dashboard principal
-│   │   ├── emergencias/   # CRUD emergencias + detalle + reporte
-│   │   ├── mapa/          # Vista de mapa
-│   │   ├── reportar/      # Formulario público ciudadano
-│   │   └── login/         # Autenticación
+│   │   ├── api/               # API Routes (auth, emergencias, tareas, evidencias, reportes)
+│   │   ├── dashboard/         # Dashboard con estadísticas
+│   │   ├── emergencias/       # Listado, nueva, detalle, editar, reporte PDF
+│   │   ├── mapa/              # Vista de mapa interactivo
+│   │   ├── reportar/          # Formulario público ciudadano
+│   │   ├── login/             # Autenticación
+│   │   ├── not-found.tsx      # Página 404
+│   │   └── layout.tsx         # Layout raíz
 │   ├── components/
-│   │   ├── dashboard/     # Componentes del dashboard
-│   │   ├── emergencies/   # Formulario, tabla, filtros, tareas, evidencias
-│   │   ├── layout/        # Sidebar, Header, MainLayout
-│   │   ├── map/           # Mapa Leaflet
-│   │   └── ui/            # Button, Modal, Alert, Loading...
+│   │   ├── dashboard/         # StatsCard, RecentEmergencies
+│   │   ├── emergencies/       # EmergencyForm, EmergencyTable, EmergencyFilters,
+│   │   │                      # TaskList, EvidenceGallery, PrintButtons
+│   │   ├── layout/            # Sidebar, Header, MainLayout
+│   │   ├── map/               # MapWrapper (client), EmergencyMap (Leaflet)
+│   │   └── ui/                # Button, Modal, Alert, Loading
 │   ├── lib/
-│   │   ├── auth.ts        # JWT / sesión
-│   │   ├── prisma.ts      # Cliente Prisma
-│   │   ├── utils.ts       # Helpers y constantes
-│   │   └── validations/   # Schemas Zod
+│   │   ├── auth.ts            # JWT / sesión (jose)
+│   │   ├── prisma.ts          # Singleton cliente Prisma
+│   │   ├── utils.ts           # Labels, formatters (client-safe, sin Prisma)
+│   │   ├── generate-code.ts   # Generador de códigos EMG (server-only)
+│   │   └── validations/       # Schemas Zod
 │   └── types/
-│       └── index.ts       # TypeScript interfaces
-├── middleware.ts           # Protección de rutas
+│       └── index.ts           # Interfaces TypeScript
+├── middleware.ts               # Protección de rutas JWT
 └── ...config files
 ```
 
+## Notas técnicas
+
+- **Auth:** JWT en cookies httpOnly con `jose`. Sin NextAuth.
+- **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import.
+- **Prisma en cliente:** `utils.ts` no importa Prisma. La función `generateEmergencyCode()` vive en `generate-code.ts` (server-only) para evitar bundling issues.
+- **DB en Railway:** Se usa `prisma db push` en lugar de `prisma migrate deploy`, ya que no se generan archivos de migración localmente.
+
 ## Roadmap (post-MVP)
 
-- [ ] Upload de imágenes a S3/Cloudflare R2
+- [ ] Upload de imágenes a S3 / Cloudflare R2
 - [ ] Notificaciones por correo electrónico
-- [ ] Gestión de usuarios (CRUD)
-- [ ] Módulo de reportes estadísticos avanzados
-- [ ] Integración con WhatsApp Business API
-- [ ] App móvil con React Native
-- [ ] Panel multi-municipio
-- [ ] Exportación a Excel/PDF avanzado
+- [ ] Gestión de usuarios (CRUD desde UI)
+- [ ] Reportes estadísticos exportables
+- [ ] Integración WhatsApp Business API
 - [ ] WebSockets para actualizaciones en tiempo real
+- [ ] Panel multi-municipio
+- [ ] App móvil React Native
