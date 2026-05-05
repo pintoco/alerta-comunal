@@ -69,7 +69,7 @@ export default function Sidebar({ userRole, userName }: SidebarProps) {
         {navItems
           .filter((item) => !item.roles || item.roles.includes(userRole))
           .map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            const isActive = !!pathname && (pathname === item.href || pathname.startsWith(item.href + '/'))
             return (
               <Link
                 key={item.href}

@@ -80,7 +80,7 @@ export default function EmergencyFilters() {
       {hasFilters && (
         <div className="mt-3 flex justify-end">
           <button
-            onClick={() => router.push(pathname)}
+            onClick={() => router.push(pathname ?? '/emergencias')}
             className="text-sm text-blue-600 hover:underline"
           >
             Limpiar filtros
