@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  OPERADOR
+  VISUALIZADOR
+}
+
+enum EmergencyType {
+  INCENDIO
+  INUNDACION
+  CAIDA_ARBOL
+  CORTE_CAMINO
+  CORTE_ELECTRICO
+  DANO_VIVIENDA
+  EMERGENCIA_SOCIAL
+  ACCIDENTE
+  RIESGO_SANITARIO
+  INFRAESTRUCTURA_PUBLICA
+  OTRO
+}
+
+enum Priority {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum EmergencyStatus {
+  NUEVA
+  EN_ATENCION
+  RESUELTA
+  CERRADA
+  DESCARTADA
+}
+
+enum ReportOrigin {
+  INTERNO
+  CIUDADANO
+}
+
+enum TaskStatus {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+  CANCELADA
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(OPERADOR)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedEmergencies Emergency[]   @relation("AssignedTo")
+  activityLogs        ActivityLog[]
+  tasks               Task[]
+}
+
+model Emergency {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  title         String
+  description   String
+  type          EmergencyType
+  priority      Priority        @default(MEDIA)
+  status        EmergencyStatus @default(NUEVA)
+  address       String
+  sector        String?
+  latitude      Float?
+  longitude     Float?
+  reporterName  String?
+  reporterPhone String?
+  origin        ReportOrigin    @default(INTERNO)
+  assignedToId  String?
+  assignedTo    User?           @relation("AssignedTo", fields: [assignedToId], references: [id])
+  occurredAt    DateTime?
+  closedAt      DateTime?
+  closingNotes  String?
+  observations  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  evidences    Evidence[]
+  tasks        Task[]
+  activityLogs ActivityLog[]
+}
+
+model Evidence {
+  id           String    @id @default(cuid())
+  emergencyId  String
+  emergency    Emergency @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+  filename     String
+  originalName String
+  url          String
+  mimeType     String
+  size         Int
+  description  String?
+  createdAt    DateTime  @default(now())
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  emergencyId  String
+  emergency    Emergency  @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  status       TaskStatus @default(PENDIENTE)
+  assignedToId String?
+  assignedTo   User?      @relation(fields: [assignedToId], references: [id])
+  dueDate      DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model ActivityLog {
+  id          String    @id @default(cuid())
+  emergencyId String
+  emergency   Emergency @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id])
+  action      String
+  description String
+  createdAt   DateTime  @default(now())
+}
