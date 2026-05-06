@@ -114,7 +114,19 @@ export default function EvidenceGallery({
                 alt={ev.originalName}
                 className="w-full h-full object-cover cursor-pointer"
                 onClick={() => setSelected(ev)}
+                onError={(e) => {
+                  const img = e.currentTarget
+                  img.style.display = 'none'
+                  const placeholder = img.nextElementSibling as HTMLElement | null
+                  if (placeholder) placeholder.style.display = 'flex'
+                }}
               />
+              <div className="absolute inset-0 hidden flex-col items-center justify-center text-gray-400 text-xs text-center p-2 bg-gray-100">
+                <svg className="w-8 h-8 mb-1 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Imagen no disponible
+              </div>
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end justify-between p-2 opacity-0 group-hover:opacity-100">
                 <button
                   onClick={() => setSelected(ev)}
@@ -155,7 +167,14 @@ export default function EvidenceGallery({
                 </svg>
               </button>
             </div>
-            <img src={selected.url} alt={selected.originalName} className="w-full max-h-[70vh] object-contain" />
+            <img
+              src={selected.url}
+              alt={selected.originalName}
+              className="w-full max-h-[70vh] object-contain"
+              onError={(e) => {
+                e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect width='400' height='200' fill='%23f3f4f6'/%3E%3Ctext x='200' y='110' font-size='14' text-anchor='middle' fill='%239ca3af' font-family='sans-serif'%3EImagen no disponible%3C/text%3E%3C/svg%3E"
+              }}
+            />
           </div>
         </div>
       )}
