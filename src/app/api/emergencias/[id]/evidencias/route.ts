@@ -105,5 +105,14 @@ export async function DELETE(
   await prisma.evidence.delete({ where: { id: evidenceId } })
   await deleteUpload(evidence.filename)
 
+  await prisma.activityLog.create({
+    data: {
+      emergencyId: id,
+      userId: session.id,
+      action: 'EVIDENCE_DELETED',
+      description: `Se eliminó la evidencia "${evidence.originalName}" por ${session.name}`,
+    },
+  })
+
   return NextResponse.json({ success: true })
 }

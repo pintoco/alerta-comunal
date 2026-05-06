@@ -26,6 +26,15 @@ export async function PATCH(
       include: { assignedTo: { select: { id: true, name: true } } },
     })
 
+    await prisma.activityLog.create({
+      data: {
+        emergencyId: id,
+        userId: session.id,
+        action: 'TASK_STATUS_CHANGED',
+        description: `La tarea "${task.title}" cambió a ${status} por ${session.name}`,
+      },
+    })
+
     return NextResponse.json(task)
   } catch {
     return NextResponse.json({ error: 'Error al actualizar tarea' }, { status: 500 })
@@ -44,6 +53,28 @@ export async function DELETE(
 
   const { id, tareaId } = await params
 
-  await prisma.task.delete({ where: { id: tareaId, emergencyId: id } })
-  return NextResponse.json({ success: true })
+  try {
+    const task = await prisma.task.findUnique({
+      where: { id: tareaId, emergencyId: id },
+    })
+
+    if (!task) {
+      return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 })
+    }
+
+    await prisma.task.delete({ where: { id: tareaId, emergencyId: id } })
+
+    await prisma.activityLog.create({
+      data: {
+        emergencyId: id,
+        userId: session.id,
+        action: 'TASK_DELETED',
+        description: `Se eliminó la tarea "${task.title}" por ${session.name}`,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Error al eliminar tarea' }, { status: 500 })
+  }
 }

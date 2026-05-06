@@ -29,18 +29,22 @@ export default function EmergencyFilters() {
     router.push(pathname + '?' + createQueryString(name, value))
   }
 
-  const hasFilters = searchParams.get('search') || searchParams.get('status') ||
-    searchParams.get('priority') || searchParams.get('type') || searchParams.get('sector')
+  const hasFilters =
+    searchParams.get('search') ||
+    searchParams.get('status') ||
+    searchParams.get('priority') ||
+    searchParams.get('type') ||
+    searchParams.get('sector')
 
   return (
     <div className="card p-4 mb-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <input
           type="text"
           placeholder="Buscar código, título, dirección..."
           defaultValue={searchParams.get('search') || ''}
           onChange={(e) => handleChange('search', e.target.value)}
-          className="form-input col-span-1 lg:col-span-2"
+          className="form-input col-span-1 sm:col-span-2 xl:col-span-2"
         />
 
         <select
@@ -75,6 +79,14 @@ export default function EmergencyFilters() {
             <option key={t} value={t}>{EMERGENCY_TYPE_LABELS[t]}</option>
           ))}
         </select>
+
+        <input
+          type="text"
+          placeholder="Filtrar por sector..."
+          defaultValue={searchParams.get('sector') || ''}
+          onChange={(e) => handleChange('sector', e.target.value)}
+          className="form-input"
+        />
       </div>
 
       {hasFilters && (

@@ -13,6 +13,7 @@ function getSecret(): Uint8Array {
 const publicPaths = [
   '/login',
   '/reportar',
+  '/consulta',
   '/api/auth/login',
   '/api/reporte-publico',
 ]

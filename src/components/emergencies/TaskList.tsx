@@ -34,13 +34,14 @@ export default function TaskList({
 }: TaskListProps) {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [createError, setCreateError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [form, setForm] = useState({ title: '', description: '', assignedToId: '', dueDate: '' })
 
   const handleCreate = async () => {
     if (!form.title.trim()) return
     setLoading(true)
-    setError('')
+    setCreateError('')
     try {
       const res = await fetch(`/api/emergencias/${emergencyId}/tareas`, {
         method: 'POST',
@@ -52,42 +53,54 @@ export default function TaskList({
           dueDate: form.dueDate || null,
         }),
       })
-      if (!res.ok) throw new Error('Error al crear tarea')
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Error al crear tarea')
+      }
       const task = await res.json()
       onTaskAdded?.(task)
       setShowModal(false)
       setForm({ title: '', description: '', assignedToId: '', dueDate: '' })
-    } catch {
-      setError('Error al crear la tarea')
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Error al crear la tarea')
     } finally {
       setLoading(false)
     }
   }
 
   const handleStatusChange = async (taskId: string, status: string) => {
+    setActionError('')
     try {
       const res = await fetch(`/api/emergencias/${emergencyId}/tareas/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Error al cambiar el estado')
+      }
       const task = await res.json()
       onTaskUpdated?.(task)
-    } catch {
-      /* silent */
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Error al cambiar el estado de la tarea')
     }
   }
 
   const handleDelete = async (taskId: string) => {
     if (!confirm('¿Eliminar esta tarea?')) return
+    setActionError('')
     try {
       const res = await fetch(`/api/emergencias/${emergencyId}/tareas/${taskId}`, {
         method: 'DELETE',
       })
-      if (res.ok) onTaskDeleted?.(taskId)
-    } catch {
-      /* silent */
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Error al eliminar')
+      }
+      onTaskDeleted?.(taskId)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Error al eliminar la tarea')
     }
   }
 
@@ -101,6 +114,13 @@ export default function TaskList({
             </svg>
             Nueva tarea
           </Button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="mb-3 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-sm flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError('')} className="ml-2 text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
 
@@ -140,6 +160,7 @@ export default function TaskList({
                   <button
                     onClick={() => handleDelete(task.id)}
                     className="p-1 text-red-400 hover:text-red-600"
+                    title="Eliminar tarea"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -195,7 +216,7 @@ export default function TaskList({
               onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
             />
           </div>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {createError && <p className="text-red-600 text-sm">{createError}</p>}
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setShowModal(false)}>Cancelar</Button>
             <Button onClick={handleCreate} loading={loading}>Crear tarea</Button>

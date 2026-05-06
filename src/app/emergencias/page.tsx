@@ -21,7 +21,13 @@ interface PageProps {
   }>
 }
 
-async function EmergencyList({ searchParams }: { searchParams: Awaited<PageProps['searchParams']> }) {
+async function EmergencyList({
+  searchParams,
+  canEdit,
+}: {
+  searchParams: Awaited<PageProps['searchParams']>
+  canEdit: boolean
+}) {
   const where: Record<string, unknown> = {}
 
   if (searchParams.search) {
@@ -47,7 +53,7 @@ async function EmergencyList({ searchParams }: { searchParams: Awaited<PageProps
     orderBy: { createdAt: 'desc' },
   })
 
-  return <EmergencyTable emergencies={emergencies as unknown as Emergency[]} />
+  return <EmergencyTable emergencies={emergencies as unknown as Emergency[]} canEdit={canEdit} />
 }
 
 export default async function EmergenciasPage({ searchParams }: PageProps) {
@@ -55,6 +61,7 @@ export default async function EmergenciasPage({ searchParams }: PageProps) {
   if (!session) redirect('/login')
 
   const params = await searchParams
+  const canEdit = session.role !== 'VISUALIZADOR'
 
   return (
     <MainLayout>
@@ -64,7 +71,7 @@ export default async function EmergenciasPage({ searchParams }: PageProps) {
             <h1 className="text-2xl font-bold text-gray-900">Emergencias</h1>
             <p className="text-gray-500 text-sm mt-1">Listado y gestión de emergencias comunales</p>
           </div>
-          {session.role !== 'VISUALIZADOR' && (
+          {canEdit && (
             <Link href="/emergencias/nueva" className="btn-primary inline-flex items-center gap-2 text-sm">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -79,7 +86,7 @@ export default async function EmergenciasPage({ searchParams }: PageProps) {
         </Suspense>
 
         <Suspense fallback={<Loading text="Cargando emergencias..." />}>
-          <EmergencyList searchParams={params} />
+          <EmergencyList searchParams={params} canEdit={canEdit} />
         </Suspense>
       </div>
     </MainLayout>

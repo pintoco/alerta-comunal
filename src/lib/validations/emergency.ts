@@ -25,6 +25,17 @@ const phoneSchema = z
 const latitudeSchema = z.number().min(-90, 'Latitud inválida').max(90, 'Latitud inválida').optional().nullable()
 const longitudeSchema = z.number().min(-180, 'Longitud inválida').max(180, 'Longitud inválida').optional().nullable()
 
+/** Valida una fecha opcional proveniente de input datetime-local (YYYY-MM-DDTHH:MM) o similar. */
+const dateStringSchema = z
+  .string()
+  .optional()
+  .nullable()
+  .refine(
+    (val) => !val || val === '' || !isNaN(new Date(val).getTime()),
+    { message: 'Fecha inválida' }
+  )
+  .transform((val) => (val && val !== '' ? val : null))
+
 export const emergencySchema = z.object({
   title: z.string().min(3, 'El título debe tener al menos 3 caracteres').max(200),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
@@ -39,7 +50,7 @@ export const emergencySchema = z.object({
   reporterPhone: phoneSchema,
   origin: z.enum(['INTERNO', 'CIUDADANO']),
   assignedToId: z.string().optional().nullable(),
-  occurredAt: z.string().optional().nullable(),
+  occurredAt: dateStringSchema,
   observations: z.string().max(1000).optional().nullable(),
 })
 

@@ -4,7 +4,12 @@ import { EMERGENCY_TYPE_LABELS, formatDate } from '@/lib/utils'
 import StatusBadge from './StatusBadge'
 import PriorityBadge from './PriorityBadge'
 
-export default function EmergencyTable({ emergencies }: { emergencies: Emergency[] }) {
+interface EmergencyTableProps {
+  emergencies: Emergency[]
+  canEdit: boolean
+}
+
+export default function EmergencyTable({ emergencies, canEdit }: EmergencyTableProps) {
   if (emergencies.length === 0) {
     return (
       <div className="card p-12 text-center">
@@ -67,12 +72,14 @@ export default function EmergencyTable({ emergencies }: { emergencies: Emergency
                     >
                       Ver
                     </Link>
-                    <Link
-                      href={`/emergencias/${e.id}/editar`}
-                      className="text-gray-600 hover:text-gray-800 text-xs font-medium"
-                    >
-                      Editar
-                    </Link>
+                    {canEdit && (
+                      <Link
+                        href={`/emergencias/${e.id}/editar`}
+                        className="text-gray-600 hover:text-gray-800 text-xs font-medium"
+                      >
+                        Editar
+                      </Link>
+                    )}
                   </div>
                 </td>
               </tr>
