@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth'
 import { emergencySchema } from '@/lib/validations/emergency'
+import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
 
   const { id } = await params
 
@@ -42,13 +40,11 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
-  if (session.role === 'VISUALIZADOR') {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
+
+  const denied = requireRole(session, MANAGE_ROLES)
+  if (denied) return denied
 
   const { id } = await params
 
@@ -111,10 +107,11 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session || session.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
+
+  const denied = requireRole(session, ['ADMIN'])
+  if (denied) return denied
 
   const { id } = await params
 

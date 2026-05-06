@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth'
 import { taskSchema } from '@/lib/validations/task'
+import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
 
   const { id } = await params
   const tasks = await prisma.task.findMany({
@@ -26,13 +24,11 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
-  if (session.role === 'VISUALIZADOR') {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
+
+  const denied = requireRole(session, MANAGE_ROLES)
+  if (denied) return denied
 
   const { id } = await params
 

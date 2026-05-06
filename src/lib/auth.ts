@@ -1,11 +1,9 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import type { Session } from '@/types'
+import { getJwtSecret } from './config'
 
-const getSecret = () =>
-  new TextEncoder().encode(
-    process.env.JWT_SECRET || 'alerta-comunal-secret-key-change-in-production'
-  )
+const getSecret = () => new TextEncoder().encode(getJwtSecret())
 
 export async function createToken(payload: Session): Promise<string> {
   return new SignJWT({ ...payload })

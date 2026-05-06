@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateEmergencyCode } from '@/lib/generate-code'
 import { publicReportSchema } from '@/lib/validations/emergency'
+import { municipalityConfig } from '@/lib/config'
 
 export async function POST(request: Request) {
   try {
@@ -18,6 +19,17 @@ export async function POST(request: Request) {
     const data = result.data
     const code = await generateEmergencyCode()
 
+    // Buscar municipalidad demo para asociar el reporte ciudadano
+    let municipalityId: string | null = null
+    try {
+      const municipality = await prisma.municipality.findUnique({
+        where: { slug: municipalityConfig.defaultSlug },
+      })
+      municipalityId = municipality?.id ?? null
+    } catch {
+      // Si la tabla aún no existe, continuar sin municipalidad
+    }
+
     const emergency = await prisma.emergency.create({
       data: {
         code,
@@ -33,6 +45,7 @@ export async function POST(request: Request) {
         reporterName: data.reporterName,
         reporterPhone: data.reporterPhone,
         origin: 'CIUDADANO',
+        municipalityId,
       },
     })
 

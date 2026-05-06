@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth'
+import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; tareaId: string }> }
 ) {
-  const session = await getSession()
-  if (!session || session.role === 'VISUALIZADOR') {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
+
+  const denied = requireRole(session, MANAGE_ROLES)
+  if (denied) return denied
 
   const { id, tareaId } = await params
 
@@ -17,8 +18,7 @@ export async function PATCH(
     const body = await request.json()
     const { status } = body
 
-    const completedAt =
-      status === 'COMPLETADA' ? new Date() : null
+    const completedAt = status === 'COMPLETADA' ? new Date() : null
 
     const task = await prisma.task.update({
       where: { id: tareaId, emergencyId: id },
@@ -36,10 +36,11 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; tareaId: string }> }
 ) {
-  const session = await getSession()
-  if (!session || session.role === 'VISUALIZADOR') {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
+
+  const denied = requireRole(session, MANAGE_ROLES)
+  if (denied) return denied
 
   const { id, tareaId } = await params
 

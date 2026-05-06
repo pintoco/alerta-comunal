@@ -26,12 +26,24 @@ export type ReportOrigin = 'INTERNO' | 'CIUDADANO'
 
 export type TaskStatus = 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADA' | 'CANCELADA'
 
+export interface Municipality {
+  id: string
+  name: string
+  slug: string
+  region?: string | null
+  commune?: string | null
+  active: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface User {
   id: string
   name: string
   email: string
   role: UserRole
   active: boolean
+  municipalityId?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -53,6 +65,7 @@ export interface Emergency {
   origin: ReportOrigin
   assignedToId?: string | null
   assignedTo?: User | null
+  municipalityId?: string | null
   occurredAt?: string | null
   closedAt?: string | null
   closingNotes?: string | null

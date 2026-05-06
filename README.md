@@ -52,6 +52,9 @@ Crea un archivo `.env` en la raíz:
 DATABASE_URL="postgresql://usuario:contraseña@localhost:5432/alertacomunal"
 JWT_SECRET="genera-un-secreto-seguro-con-openssl-rand-base64-32"
 APP_URL="http://localhost:3000"
+PUBLIC_DEFAULT_MUNICIPALITY_SLUG=demo
+STORAGE_PROVIDER=local
+MAX_UPLOAD_SIZE_MB=5
 ```
 
 ### 3. Inicializar base de datos
@@ -83,8 +86,11 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
 | `DATABASE_URL` | URL de conexión PostgreSQL | `postgresql://user:pass@host:5432/db` |
-| `JWT_SECRET` | Secreto para firmar tokens JWT | Cadena aleatoria de 32+ caracteres |
+| `JWT_SECRET` | Secreto JWT — **obligatorio en producción** | Cadena aleatoria 32+ chars (`openssl rand -base64 32`) |
 | `APP_URL` | URL base de la aplicación | `http://localhost:3000` |
+| `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` | Slug de municipalidad para reportes ciudadanos | `demo` |
+| `STORAGE_PROVIDER` | Backend de almacenamiento de archivos | `local` |
+| `MAX_UPLOAD_SIZE_MB` | Tamaño máximo de upload en MB | `5` |
 
 ## Comandos disponibles
 
@@ -125,6 +131,9 @@ En **Variables** del servicio agrega:
 ```
 JWT_SECRET=<genera con: openssl rand -base64 32>
 APP_URL=https://tu-app.up.railway.app
+PUBLIC_DEFAULT_MUNICIPALITY_SLUG=demo
+STORAGE_PROVIDER=local
+MAX_UPLOAD_SIZE_MB=5
 ```
 
 > **No agregar `NODE_ENV`** como variable de servicio. Railway inyecta un valor no estándar que confunde a Next.js. El script de build ya incluye `NODE_ENV=production next build` para forzar el modo correcto.
@@ -145,11 +154,12 @@ Railway detecta el push a `main` y despliega automáticamente. El primer deploy 
 
 ## Usuarios demo
 
-| Email | Contraseña | Rol |
-|-------|-----------|-----|
-| `ppinto@elementalpro.cl` | `Admin123456` | ADMIN |
-| `mgonzalez@alertacomunal.cl` | `Operador123` | OPERADOR |
-| `cmartinez@alertacomunal.cl` | `Operador123` | OPERADOR |
+| Email | Contraseña | Rol | Permisos |
+|-------|-----------|-----|----------|
+| `ppinto@elementalpro.cl` | `Admin123456` | ADMIN | Todo |
+| `mgonzalez@alertacomunal.cl` | `Operador123` | OPERADOR | Crear/editar emergencias, tareas y evidencias |
+| `cmartinez@alertacomunal.cl` | `Operador123` | OPERADOR | Crear/editar emergencias, tareas y evidencias |
+| `visualizador@alertacomunal.cl` | `Visualizador123` | VISUALIZADOR | Solo lectura |
 
 **Formulario ciudadano público:** `/reportar` (no requiere login)
 

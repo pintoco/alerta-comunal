@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth'
 import { generateEmergencyCode } from '@/lib/generate-code'
 import { emergencySchema } from '@/lib/validations/emergency'
+import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 
 export async function GET(request: Request) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
 
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || ''
@@ -45,13 +43,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-  }
-  if (session.role === 'VISUALIZADOR') {
-    return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
-  }
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
+
+  const denied = requireRole(session, MANAGE_ROLES)
+  if (denied) return denied
 
   try {
     const body = await request.json()
@@ -67,12 +63,18 @@ export async function POST(request: Request) {
     const data = result.data
     const code = await generateEmergencyCode()
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { municipalityId: true },
+    })
+
     const emergency = await prisma.emergency.create({
       data: {
         ...data,
         code,
         status: data.status || 'NUEVA',
         occurredAt: data.occurredAt ? new Date(data.occurredAt) : null,
+        municipalityId: user?.municipalityId ?? null,
       } as any,
       include: {
         assignedTo: { select: { id: true, name: true, email: true } },

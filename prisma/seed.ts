@@ -1,4 +1,12 @@
-import { PrismaClient, UserRole, EmergencyType, Priority, EmergencyStatus, ReportOrigin, TaskStatus } from '@prisma/client'
+import {
+  PrismaClient,
+  UserRole,
+  EmergencyType,
+  Priority,
+  EmergencyStatus,
+  ReportOrigin,
+  TaskStatus,
+} from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
@@ -6,15 +14,31 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('Iniciando seed...')
 
+  // Municipalidad demo (idempotente por slug único)
+  const municipality = await prisma.municipality.upsert({
+    where: { slug: 'demo' },
+    update: { name: 'Municipalidad Demo', active: true },
+    create: {
+      name: 'Municipalidad Demo',
+      slug: 'demo',
+      region: 'Región Demo',
+      commune: 'Comuna Demo',
+      active: true,
+    },
+  })
+  console.log(`  ✓ Municipalidad: ${municipality.name} (${municipality.slug})`)
+
+  // Usuarios (upsert — no duplica, actualiza municipalityId si ya existe)
   const adminPassword = await bcrypt.hash('Admin123456', 10)
   const admin = await prisma.user.upsert({
     where: { email: 'ppinto@elementalpro.cl' },
-    update: {},
+    update: { municipalityId: municipality.id },
     create: {
       name: 'Administrador',
       email: 'ppinto@elementalpro.cl',
       password: adminPassword,
       role: UserRole.ADMIN,
+      municipalityId: municipality.id,
     },
   })
 
@@ -22,42 +46,50 @@ async function main() {
 
   const operador1 = await prisma.user.upsert({
     where: { email: 'mgonzalez@alertacomunal.cl' },
-    update: {},
+    update: { municipalityId: municipality.id },
     create: {
       name: 'María González',
       email: 'mgonzalez@alertacomunal.cl',
       password: opPassword,
       role: UserRole.OPERADOR,
+      municipalityId: municipality.id,
     },
   })
 
   const operador2 = await prisma.user.upsert({
     where: { email: 'cmartinez@alertacomunal.cl' },
-    update: {},
+    update: { municipalityId: municipality.id },
     create: {
       name: 'Carlos Martínez',
       email: 'cmartinez@alertacomunal.cl',
       password: opPassword,
       role: UserRole.OPERADOR,
+      municipalityId: municipality.id,
     },
   })
 
+  const vizPassword = await bcrypt.hash('Visualizador123', 10)
   await prisma.user.upsert({
     where: { email: 'visualizador@alertacomunal.cl' },
-    update: {},
+    update: { municipalityId: municipality.id },
     create: {
       name: 'Visualizador Demo',
       email: 'visualizador@alertacomunal.cl',
-      password: opPassword,
+      password: vizPassword,
       role: UserRole.VISUALIZADOR,
+      municipalityId: municipality.id,
     },
   })
 
+  console.log('  ✓ 4 usuarios creados/actualizados')
+
+  // Emergencias de ejemplo (solo crea si no existen por código)
   const emergenciesData = [
     {
       code: 'EMG-2026-0001',
       title: 'Incendio en edificio residencial',
-      description: 'Se reporta incendio en tercer piso de edificio residencial. Humo visible desde la calle. Vecinos evacuados preventivamente.',
+      description:
+        'Se reporta incendio en tercer piso de edificio residencial. Humo visible desde la calle. Vecinos evacuados preventivamente.',
       type: EmergencyType.INCENDIO,
       priority: Priority.CRITICA,
       status: EmergencyStatus.EN_ATENCION,
@@ -69,11 +101,13 @@ async function main() {
       reporterPhone: '+56912345678',
       origin: ReportOrigin.CIUDADANO,
       assignedToId: operador1.id,
+      municipalityId: municipality.id,
     },
     {
       code: 'EMG-2026-0002',
       title: 'Inundación en sector Las Flores',
-      description: 'Desbordamiento de canal causa inundación en calles del sector. Varios vehículos varados. Se requiere maquinaria para despejar.',
+      description:
+        'Desbordamiento de canal causa inundación en calles del sector. Varios vehículos varados. Se requiere maquinaria para despejar.',
       type: EmergencyType.INUNDACION,
       priority: Priority.ALTA,
       status: EmergencyStatus.EN_ATENCION,
@@ -85,11 +119,13 @@ async function main() {
       reporterPhone: '+56987654321',
       origin: ReportOrigin.CIUDADANO,
       assignedToId: operador2.id,
+      municipalityId: municipality.id,
     },
     {
       code: 'EMG-2026-0003',
       title: 'Caída de árbol en vía pública',
-      description: 'Árbol de gran tamaño cayó sobre la calzada durante madrugada bloqueando el tránsito vehicular completo.',
+      description:
+        'Árbol de gran tamaño cayó sobre la calzada durante madrugada bloqueando el tránsito vehicular completo.',
       type: EmergencyType.CAIDA_ARBOL,
       priority: Priority.MEDIA,
       status: EmergencyStatus.NUEVA,
@@ -100,11 +136,13 @@ async function main() {
       reporterName: 'Pedro Silva',
       reporterPhone: '+56911223344',
       origin: ReportOrigin.CIUDADANO,
+      municipalityId: municipality.id,
     },
     {
       code: 'EMG-2026-0004',
       title: 'Corte eléctrico masivo sector sur',
-      description: 'Corte de suministro eléctrico afecta a más de 200 viviendas del sector sur. Se coordinó con empresa distribuidora.',
+      description:
+        'Corte de suministro eléctrico afecta a más de 200 viviendas del sector sur. Se coordinó con empresa distribuidora.',
       type: EmergencyType.CORTE_ELECTRICO,
       priority: Priority.ALTA,
       status: EmergencyStatus.RESUELTA,
@@ -114,11 +152,13 @@ async function main() {
       longitude: -70.66,
       origin: ReportOrigin.INTERNO,
       assignedToId: operador1.id,
+      municipalityId: municipality.id,
     },
     {
       code: 'EMG-2026-0005',
       title: 'Daño en vivienda por lluvia',
-      description: 'Colapso parcial de techo en vivienda social. Familia con 3 menores afectada, requirió traslado temporal.',
+      description:
+        'Colapso parcial de techo en vivienda social. Familia con 3 menores afectada, requirió traslado temporal.',
       type: EmergencyType.DANO_VIVIENDA,
       priority: Priority.ALTA,
       status: EmergencyStatus.CERRADA,
@@ -131,15 +171,19 @@ async function main() {
       origin: ReportOrigin.CIUDADANO,
       assignedToId: operador2.id,
       closedAt: new Date(),
-      closingNotes: 'Se coordinó con SEREMI de Vivienda para traslado temporal. Techado provisional instalado por municipio.',
+      closingNotes:
+        'Se coordinó con SEREMI de Vivienda para traslado temporal. Techado provisional instalado por municipio.',
+      municipalityId: municipality.id,
     },
   ]
 
+  let created = 0
   for (const emergencyData of emergenciesData) {
     const existing = await prisma.emergency.findUnique({ where: { code: emergencyData.code } })
     if (existing) continue
 
     const emergency = await prisma.emergency.create({ data: emergencyData as any })
+    created++
 
     if (emergency.code === 'EMG-2026-0001') {
       await prisma.task.createMany({
@@ -189,11 +233,13 @@ async function main() {
     }
   }
 
-  console.log('Seed completado:')
-  console.log('  - Admin: ppinto@elementalpro.cl / Admin123456')
-  console.log('  - Operador 1: mgonzalez@alertacomunal.cl / Operador123')
-  console.log('  - Operador 2: cmartinez@alertacomunal.cl / Operador123')
-  console.log('  - 5 emergencias de ejemplo creadas')
+  console.log(`  ✓ ${created} emergencias creadas (${5 - created} ya existían)`)
+  console.log('')
+  console.log('Seed completado. Credenciales demo:')
+  console.log('  ADMIN      ppinto@elementalpro.cl         / Admin123456')
+  console.log('  OPERADOR   mgonzalez@alertacomunal.cl     / Operador123')
+  console.log('  OPERADOR   cmartinez@alertacomunal.cl     / Operador123')
+  console.log('  VISUALIZADOR visualizador@alertacomunal.cl / Visualizador123')
 }
 
 main()

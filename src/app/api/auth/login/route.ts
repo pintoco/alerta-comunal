@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { createToken } from '@/lib/auth'
 import { loginSchema } from '@/lib/validations/auth'
+import { isProduction } from '@/lib/config'
 
 export async function POST(request: Request) {
   try {
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
 
     response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'lax',
       maxAge: 60 * 60 * 8,
       path: '/',

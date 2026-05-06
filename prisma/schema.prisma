@@ -54,15 +54,31 @@ enum TaskStatus {
   CANCELADA
 }
 
-model User {
+model Municipality {
   id        String   @id @default(cuid())
   name      String
-  email     String   @unique
-  password  String
-  role      UserRole @default(OPERADOR)
+  slug      String   @unique
+  region    String?
+  commune   String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  users       User[]
+  emergencies Emergency[]
+}
+
+model User {
+  id             String        @id @default(cuid())
+  name           String
+  email          String        @unique
+  password       String
+  role           UserRole      @default(OPERADOR)
+  active         Boolean       @default(true)
+  municipalityId String?
+  municipality   Municipality? @relation(fields: [municipalityId], references: [id])
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   assignedEmergencies Emergency[]   @relation("AssignedTo")
   activityLogs        ActivityLog[]
@@ -70,28 +86,30 @@ model User {
 }
 
 model Emergency {
-  id            String          @id @default(cuid())
-  code          String          @unique
-  title         String
-  description   String
-  type          EmergencyType
-  priority      Priority        @default(MEDIA)
-  status        EmergencyStatus @default(NUEVA)
-  address       String
-  sector        String?
-  latitude      Float?
-  longitude     Float?
-  reporterName  String?
-  reporterPhone String?
-  origin        ReportOrigin    @default(INTERNO)
-  assignedToId  String?
-  assignedTo    User?           @relation("AssignedTo", fields: [assignedToId], references: [id])
-  occurredAt    DateTime?
-  closedAt      DateTime?
-  closingNotes  String?
-  observations  String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id             String          @id @default(cuid())
+  code           String          @unique
+  title          String
+  description    String
+  type           EmergencyType
+  priority       Priority        @default(MEDIA)
+  status         EmergencyStatus @default(NUEVA)
+  address        String
+  sector         String?
+  latitude       Float?
+  longitude      Float?
+  reporterName   String?
+  reporterPhone  String?
+  origin         ReportOrigin    @default(INTERNO)
+  assignedToId   String?
+  assignedTo     User?           @relation("AssignedTo", fields: [assignedToId], references: [id])
+  municipalityId String?
+  municipality   Municipality?   @relation(fields: [municipalityId], references: [id])
+  occurredAt     DateTime?
+  closedAt       DateTime?
+  closingNotes   String?
+  observations   String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   evidences    Evidence[]
   tasks        Task[]

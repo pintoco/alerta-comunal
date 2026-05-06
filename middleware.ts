@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { jwtVerify } from 'jose'
 
-const secret = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'alerta-comunal-secret-key-change-in-production'
-)
+// Middleware corre en Edge runtime: leer JWT_SECRET directo desde process.env.
+// En producción Railway, si JWT_SECRET no está configurado los tokens no
+// verifican y el usuario es redirigido a /login (fallo seguro).
+function getSecret(): Uint8Array {
+  return new TextEncoder().encode(
+    process.env.JWT_SECRET || 'alerta-comunal-dev-secret-DO-NOT-USE-IN-PRODUCTION'
+  )
+}
 
 const publicPaths = [
   '/login',
@@ -35,7 +40,7 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    await jwtVerify(token, secret)
+    await jwtVerify(token, getSecret())
     return NextResponse.next()
   } catch {
     const response = NextResponse.redirect(new URL('/login', request.url))
