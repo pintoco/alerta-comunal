@@ -57,9 +57,10 @@ interface SidebarProps {
   userRole: UserRole
   userName: string
   municipalityName?: string | null
+  municipalityCommune?: string | null
 }
 
-export default function Sidebar({ userRole, userName, municipalityName }: SidebarProps) {
+export default function Sidebar({ userRole, userName, municipalityName, municipalityCommune }: SidebarProps) {
   const pathname = usePathname()
 
   const contextLabel = municipalityName ?? (userRole === 'ADMIN' ? 'Vista global' : null)
@@ -77,6 +78,9 @@ export default function Sidebar({ userRole, userName, municipalityName }: Sideba
             <p className="text-white font-bold text-sm leading-tight">AlertaComunal</p>
             {contextLabel && (
               <p className="text-slate-400 text-xs truncate" title={contextLabel}>{contextLabel}</p>
+            )}
+            {municipalityCommune && (
+              <p className="text-slate-500 text-xs truncate" title={municipalityCommune}>{municipalityCommune}</p>
             )}
           </div>
         </div>

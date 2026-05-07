@@ -19,6 +19,8 @@ interface PageProps {
     priority?: string
     type?: string
     sector?: string
+    desde?: string
+    hasta?: string
   }>
 }
 
@@ -55,6 +57,19 @@ async function EmergencyList({
   if (searchParams.priority) where.priority = searchParams.priority
   if (searchParams.type) where.type = searchParams.type
   if (searchParams.sector) where.sector = { contains: searchParams.sector, mode: 'insensitive' }
+
+  if (searchParams.desde || searchParams.hasta) {
+    const createdAt: Record<string, Date> = {}
+    if (searchParams.desde) {
+      const d = new Date(searchParams.desde)
+      if (!isNaN(d.getTime())) createdAt.gte = d
+    }
+    if (searchParams.hasta) {
+      const d = new Date(searchParams.hasta)
+      if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); createdAt.lte = d }
+    }
+    if (Object.keys(createdAt).length > 0) where.createdAt = createdAt
+  }
 
   const emergencies = await prisma.emergency.findMany({
     where,

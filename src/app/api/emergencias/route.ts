@@ -19,6 +19,8 @@ export async function GET(request: Request) {
   const priority = searchParams.get('priority') || ''
   const type = searchParams.get('type') || ''
   const sector = searchParams.get('sector') || ''
+  const desde = searchParams.get('desde') || ''
+  const hasta = searchParams.get('hasta') || ''
 
   const where: Record<string, unknown> = { ...getMunicipalityFilter(session) }
 
@@ -35,6 +37,13 @@ export async function GET(request: Request) {
   if (priority) where.priority = priority
   if (type) where.type = type
   if (sector) where.sector = { contains: sector, mode: 'insensitive' }
+
+  if (desde || hasta) {
+    const createdAt: Record<string, Date> = {}
+    if (desde) { const d = new Date(desde); if (!isNaN(d.getTime())) createdAt.gte = d }
+    if (hasta) { const d = new Date(hasta); if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); createdAt.lte = d } }
+    if (Object.keys(createdAt).length > 0) where.createdAt = createdAt
+  }
 
   const emergencies = await prisma.emergency.findMany({
     where,

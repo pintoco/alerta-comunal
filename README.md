@@ -31,6 +31,71 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 - Historial de actividad completo (creación, cambios de estado, tareas, evidencias)
 - Filtros avanzados de búsqueda (estado, prioridad, tipo, sector, texto libre)
 
+## Demo municipal
+
+AlertaComunal incluye un conjunto de funcionalidades orientadas a la presentación ante municipios y servicios públicos.
+
+### Dashboard ejecutivo
+
+El dashboard muestra métricas operacionales en tiempo real:
+
+- **Tarjetas de estado:** total, nuevas, en atención, resueltas, cerradas, críticas activas
+- **Métricas de período:** emergencias registradas y cerradas en los últimos 7 días
+- **Tasa de resolución:** porcentaje de emergencias resueltas o cerradas sobre el total
+- **Tiempo promedio de cierre:** promedio en días desde creación hasta cierre
+- **Distribución por tipo:** barras horizontales con todos los tipos de emergencia
+- **Distribución por prioridad:** barras con colores por nivel de criticidad (crítica, alta, media, baja)
+
+Todos los indicadores respetan el scope municipal: OPERADOR y VISUALIZADOR solo ven datos de su municipalidad; ADMIN tiene vista global.
+
+### Exportación CSV
+
+Desde el listado de emergencias, el botón **Exportar CSV** descarga un archivo con todos los registros visibles aplicando los filtros activos:
+
+- Ruta: `GET /api/emergencias/export`
+- Respeta scope municipal (nunca expone datos de otra municipalidad)
+- Respeta todos los filtros: estado, prioridad, tipo, sector, búsqueda de texto, rango de fechas
+- Columnas: código, título, tipo, prioridad, estado, dirección, sector, origen, reportante, teléfono, responsable, fecha creación, fecha ocurrencia, fecha cierre
+- Codificación UTF-8 con BOM (compatible con Excel en español)
+
+### Filtros por rango de fecha
+
+El listado de emergencias acepta filtros `desde` y `hasta` sobre el campo `createdAt`. Compatible con todos los filtros existentes (estado, prioridad, tipo, sector, búsqueda). Los filtros también se aplican al CSV exportado.
+
+### Reportes imprimibles
+
+El reporte de cada emergencia (`/emergencias/[id]/reporte`) está diseñado para impresión institucional:
+
+- Encabezado con logo AlertaComunal, nombre de municipalidad, comuna y región
+- Código de emergencia destacado y fecha de emisión
+- Datos organizados en dos columnas (datos generales + ubicación)
+- Tabla de tareas con estado y responsable
+- Galería de evidencias fotográficas
+- **Historial de actividad completo** con fecha, descripción y usuario responsable de cada cambio
+- **Bloque de firma** con espacio para firma del responsable municipal y timbre de unidad
+- Compatible con impresión desde navegador y exportación a PDF
+
+### Formulario ciudadano (`/reportar`)
+
+- Acceso público sin login
+- Geocodificación de dirección (Nominatim/OpenStreetMap)
+- Foto opcional (se sube a MinIO/S3 o almacenamiento local)
+- Genera código único de seguimiento (EMG-YYYY-XXXX)
+- Asigna automáticamente la municipalidad demo
+
+### Consulta ciudadana (`/consulta`)
+
+- Búsqueda por código único
+- Devuelve solo campos públicos: estado, tipo, dirección, fechas
+- No expone usuarios internos, teléfonos ni historial de actividad
+
+### Separación por municipalidad
+
+- OPERADOR y VISUALIZADOR solo ven emergencias, usuarios y estadísticas de su municipalidad
+- ADMIN tiene vista global sin restricciones
+- El sidebar muestra nombre, comuna y región de la municipalidad activa
+- Los usuarios sin municipalidad asignada reciben 403 en todas las operaciones
+
 ## Instalación local
 
 ### Prerequisitos
