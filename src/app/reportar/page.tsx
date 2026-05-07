@@ -6,28 +6,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { publicReportSchema, PublicReportFormData } from '@/lib/validations/emergency'
 import { EMERGENCY_TYPE_LABELS, EMERGENCY_TYPES } from '@/lib/utils'
 import Button from '@/components/ui/Button'
-
-async function geocodeAddress(address: string): Promise<{ lat: number; lon: number; display: string } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&accept-language=es`
-  const res = await fetch(url, { headers: { 'User-Agent': 'AlertaComunal/1.0' } })
-  const data = await res.json()
-  if (!data.length) return null
-  return {
-    lat: parseFloat(data[0].lat),
-    lon: parseFloat(data[0].lon),
-    display: data[0].display_name.split(',').slice(0, 3).join(','),
-  }
-}
+import LocationPicker, { type Coords } from '@/components/emergencies/LocationPicker'
 
 export default function ReportarPage() {
   const [submitted, setSubmitted] = useState(false)
   const [reportCode, setReportCode] = useState('')
   const [error, setError] = useState('')
 
-  // Coordenadas geocodificadas
-  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null)
-  const [geocoding, setGeocoding] = useState(false)
-  const [geocodeMsg, setGeocodeMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [coords, setCoords] = useState<Coords | null>(null)
+  const [currentAddress, setCurrentAddress] = useState('')
 
   // Foto opcional
   const photoRef = useRef<HTMLInputElement>(null)
@@ -38,31 +25,12 @@ export default function ReportarPage() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PublicReportFormData>({
     resolver: zodResolver(publicReportSchema),
     defaultValues: { type: 'OTRO' },
   })
-
-  const handleGeocode = async () => {
-    const address = watch('address')
-    if (!address) return
-    setGeocoding(true)
-    setGeocodeMsg(null)
-    try {
-      const result = await geocodeAddress(address)
-      if (result) {
-        setCoords({ lat: result.lat, lon: result.lon })
-        setGeocodeMsg({ text: `Ubicado: ${result.display}`, ok: true })
-      } else {
-        setGeocodeMsg({ text: 'No se encontró la dirección. Agrega la ciudad o país.', ok: false })
-      }
-    } catch {
-      setGeocodeMsg({ text: 'Error al buscar la dirección.', ok: false })
-    } finally {
-      setGeocoding(false)
-    }
-  }
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhotoError('')
@@ -98,7 +66,7 @@ export default function ReportarPage() {
       if (data.sector) formData.append('sector', data.sector)
       if (coords) {
         formData.append('latitude', String(coords.lat))
-        formData.append('longitude', String(coords.lon))
+        formData.append('longitude', String(coords.lng))
       }
       const photoFile = photoRef.current?.files?.[0]
       if (photoFile) formData.append('photo', photoFile)
@@ -147,7 +115,7 @@ export default function ReportarPage() {
               Consultar estado de mi reporte →
             </a>
             <button
-              onClick={() => { setSubmitted(false); setReportCode(''); setCoords(null); setGeocodeMsg(null); setPhotoName('') }}
+              onClick={() => { setSubmitted(false); setReportCode(''); setCoords(null); setCurrentAddress(''); setPhotoName('') }}
               className="text-sm text-gray-500 hover:underline"
             >
               Enviar otro reporte
@@ -233,44 +201,17 @@ export default function ReportarPage() {
             <h2 className="font-semibold text-gray-900">Ubicación</h2>
             <div>
               <label className="form-label">Dirección exacta *</label>
-              <div className="flex gap-2">
-                <input
-                  {...register('address')}
-                  className="form-input flex-1"
-                  placeholder="Av. Principal 1234, Ciudad"
-                />
-                <button
-                  type="button"
-                  onClick={handleGeocode}
-                  disabled={geocoding || !watch('address')}
-                  title="Buscar coordenadas automáticamente"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                >
-                  {geocoding ? (
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                  Geocodificar
-                </button>
-              </div>
-              {errors.address && <p className="form-error">{errors.address.message}</p>}
-              {geocodeMsg && (
-                <p className={`text-xs mt-1 ${geocodeMsg.ok ? 'text-green-600' : 'text-amber-600'}`}>
-                  {geocodeMsg.ok ? '✓ ' : '⚠ '}{geocodeMsg.text}
-                </p>
-              )}
-              {coords && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Coordenadas: {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
-                </p>
-              )}
+              <LocationPicker
+                address={currentAddress || watch('address') || ''}
+                onAddressChange={(v) => {
+                  setCurrentAddress(v)
+                  setValue('address', v, { shouldValidate: true })
+                }}
+                coords={coords}
+                onCoordsChange={setCoords}
+                addressError={errors.address?.message}
+                placeholder="Av. Principal 1234, Santiago"
+              />
             </div>
             <div>
               <label className="form-label">Sector o barrio</label>

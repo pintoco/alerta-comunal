@@ -17,18 +17,7 @@ import {
 import type { User, Emergency } from '@/types'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
-
-async function geocodeAddress(address: string): Promise<{ lat: number; lon: number; display: string } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&accept-language=es`
-  const res = await fetch(url, { headers: { 'User-Agent': 'AlertaComunal/1.0' } })
-  const data = await res.json()
-  if (!data.length) return null
-  return {
-    lat: parseFloat(data[0].lat),
-    lon: parseFloat(data[0].lon),
-    display: data[0].display_name.split(',').slice(0, 3).join(','),
-  }
-}
+import LocationPicker, { type Coords } from '@/components/emergencies/LocationPicker'
 
 interface EmergencyFormProps {
   users: Pick<User, 'id' | 'name'>[]
@@ -40,8 +29,11 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
   const router = useRouter()
   const [serverError, setServerError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [geocoding, setGeocoding] = useState(false)
-  const [geocodeMsg, setGeocodeMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  const [coords, setCoords] = useState<Coords | null>(
+    initial?.latitude && initial?.longitude
+      ? { lat: initial.latitude, lng: initial.longitude }
+      : null
+  )
 
   const {
     register,
@@ -72,25 +64,10 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
     },
   })
 
-  const handleGeocode = async () => {
-    const address = watch('address')
-    if (!address) return
-    setGeocoding(true)
-    setGeocodeMsg(null)
-    try {
-      const result = await geocodeAddress(address)
-      if (result) {
-        setValue('latitude', result.lat, { shouldValidate: true })
-        setValue('longitude', result.lon, { shouldValidate: true })
-        setGeocodeMsg({ text: `Ubicado: ${result.display}`, ok: true })
-      } else {
-        setGeocodeMsg({ text: 'No se encontró la dirección. Intenta agregar la ciudad o país.', ok: false })
-      }
-    } catch {
-      setGeocodeMsg({ text: 'Error al buscar la dirección.', ok: false })
-    } finally {
-      setGeocoding(false)
-    }
+  const handleCoordsChange = (c: Coords | null) => {
+    setCoords(c)
+    setValue('latitude', c?.lat ?? null, { shouldValidate: true })
+    setValue('longitude', c?.lng ?? null, { shouldValidate: true })
   }
 
   const onSubmit = async (data: EmergencyFormData) => {
@@ -204,39 +181,14 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="form-label">Dirección *</label>
-            <div className="flex gap-2">
-              <input
-                {...register('address')}
-                className="form-input flex-1"
-                placeholder="Av. Principal 1234, Ciudad"
-              />
-              <button
-                type="button"
-                onClick={handleGeocode}
-                disabled={geocoding || !watch('address')}
-                title="Buscar coordenadas automáticamente"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-              >
-                {geocoding ? (
-                  <svg className="w-4 h-4 animate-spin text-gray-500" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                )}
-                Geocodificar
-              </button>
-            </div>
-            {errors.address && <p className="form-error">{errors.address.message}</p>}
-            {geocodeMsg && (
-              <p className={`text-xs mt-1 ${geocodeMsg.ok ? 'text-green-600' : 'text-amber-600'}`}>
-                {geocodeMsg.text}
-              </p>
-            )}
+            <LocationPicker
+              address={watch('address') || ''}
+              onAddressChange={(v) => setValue('address', v, { shouldValidate: true })}
+              coords={coords}
+              onCoordsChange={handleCoordsChange}
+              addressError={errors.address?.message}
+              placeholder="Av. Principal 1234, Santiago"
+            />
           </div>
 
           <div>
@@ -255,30 +207,6 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
               {...register('occurredAt')}
               className="form-input"
             />
-          </div>
-
-          <div>
-            <label className="form-label">Latitud</label>
-            <input
-              type="number"
-              step="any"
-              {...register('latitude', { valueAsNumber: true })}
-              className="form-input"
-              placeholder="-33.4569"
-            />
-            <p className="text-xs text-gray-400 mt-1">Se completa al geocodificar</p>
-          </div>
-
-          <div>
-            <label className="form-label">Longitud</label>
-            <input
-              type="number"
-              step="any"
-              {...register('longitude', { valueAsNumber: true })}
-              className="form-input"
-              placeholder="-70.6483"
-            />
-            <p className="text-xs text-gray-400 mt-1">Se completa al geocodificar</p>
           </div>
         </div>
       </div>
