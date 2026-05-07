@@ -23,9 +23,9 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 - Dashboard con estadísticas en tiempo real
 - CRUD completo de emergencias con código automático (EMG-2026-XXXX)
 - Mapa interactivo con marcadores por prioridad
-- Subida de evidencias fotográficas
+- Subida de evidencias fotográficas (almacenamiento local o MinIO/S3)
 - Gestión de tareas por emergencia con auditoría de cambios
-- Formulario ciudadano público en `/reportar` (sin login) con geocodificación y foto opcional
+- Formulario ciudadano público en `/reportar` (sin login) con ubicación GPS, geocodificación y foto opcional
 - Consulta pública de estado de reporte en `/consulta` (sin login)
 - Reporte imprimible y exportable a PDF por emergencia
 - Historial de actividad completo (creación, cambios de estado, tareas, evidencias)
@@ -198,7 +198,8 @@ alerta-comunal/
 │   ├── components/
 │   │   ├── dashboard/         # StatsCard, RecentEmergencies
 │   │   ├── emergencies/       # EmergencyForm, EmergencyTable, EmergencyFilters,
-│   │   │                      # TaskList, EvidenceGallery, PrintButtons
+│   │   │                      # TaskList, EvidenceGallery, PrintButtons,
+│   │   │                      # LocationPicker (GPS+geocoding+mapa), MiniMap (Leaflet)
 │   │   ├── layout/            # Sidebar, Header, MainLayout
 │   │   ├── map/               # MapWrapper (client), EmergencyMap (Leaflet)
 │   │   └── ui/                # Button, Modal, Alert, Loading
@@ -223,8 +224,8 @@ alerta-comunal/
 
 - **Auth:** JWT en cookies httpOnly con `jose`. Sin NextAuth.
 - **Rate limiting:** Implementado en memoria (`Map`) en `src/lib/rate-limit.ts`. Máximo 5 intentos de login por IP en ventana de 15 minutos. Se reinicia al lograr acceso exitoso. En instancias múltiples (horizontal scaling) el estado no se comparte — solución suficiente para MVP; migrar a Redis en producción de alta escala.
-- **Geocodificación:** Nominatim / OpenStreetMap (gratuito, sin API key). El formulario `/reportar` y el formulario interno tienen botón para convertir dirección a coordenadas lat/lon.
-- **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import.
+- **Geolocalización:** Componente `LocationPicker` compartido entre `/reportar` y el formulario interno. Ofrece tres modos: (1) botón **GPS** que llama a `navigator.geolocation` y hace reverse geocoding con Nominatim para obtener la dirección; (2) búsqueda por texto con `countrycodes=cl` para resultados chilenos, con dropdown cuando hay varias coincidencias; (3) mini-mapa Leaflet con pin arrastrable y click-to-place — al mover el pin se actualiza la dirección automáticamente por reverse geocoding.
+- **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import. El mini-mapa del `LocationPicker` usa el mismo patrón (`MiniMap.tsx` importado con `dynamic`).
 - **Prisma en cliente:** `utils.ts` no importa Prisma. La función `generateEmergencyCode()` vive en `generate-code.ts` (server-only) para evitar bundling issues.
 - **Race condition en códigos:** La función `generateEmergencyCode()` usa `COUNT` (no atómico). Los endpoints POST de emergencias implementan un loop de reintentos (máx. 3) capturando el error Prisma P2002 en el campo `code`.
 - **DB en Railway:** Se usa `prisma db push` en lugar de `prisma migrate deploy`, ya que no se generan archivos de migración localmente.
@@ -303,6 +304,7 @@ MAX_UPLOAD_SIZE_MB=5
 ## Roadmap (post-MVP)
 
 - [x] Upload de imágenes a MinIO/S3 (proveedor configurable)
+- [x] Geolocalización mejorada: GPS, múltiples sugerencias, mini-mapa con pin arrastrable
 - [ ] Notificaciones por correo electrónico
 - [ ] Gestión de usuarios (CRUD desde UI)
 - [ ] Reportes estadísticos exportables
