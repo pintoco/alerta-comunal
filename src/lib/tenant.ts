@@ -4,14 +4,16 @@ import type { Session } from '@/types'
 
 /**
  * Returns Prisma where clause fragment for emergency municipality scoping.
- * ADMIN: null (no restriction).
+ * ADMIN: {} (no restriction).
  * OPERADOR/VISUALIZADOR with municipalityId: { municipalityId }.
- * OPERADOR/VISUALIZADOR without municipalityId: use requireMunicipalityAssigned before calling.
+ * OPERADOR/VISUALIZADOR without municipalityId: { id: '__never__' } — returns zero results.
+ * Always call requireMunicipalityAssigned first in API routes to get a proper 403 instead.
  */
-export function getMunicipalityFilter(session: Session): { municipalityId: string } | Record<string, never> {
+export function getMunicipalityFilter(session: Session): Record<string, unknown> {
   if (session.role === 'ADMIN') return {}
   if (session.municipalityId) return { municipalityId: session.municipalityId }
-  return {}
+  // Non-ADMIN without municipality: safe fallback that returns no results
+  return { id: '__never__' }
 }
 
 /**

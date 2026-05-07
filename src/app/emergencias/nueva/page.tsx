@@ -11,8 +11,14 @@ export default async function NuevaEmergenciaPage() {
   if (!session) redirect('/login')
   if (session.role === 'VISUALIZADOR') redirect('/dashboard')
 
+  // Filtrar usuarios por municipalidad: ADMIN ve todos, OPERADOR solo su municipalidad
+  const usersWhere: Record<string, unknown> = { active: true }
+  if (session.role !== 'ADMIN' && session.municipalityId) {
+    usersWhere.municipalityId = session.municipalityId
+  }
+
   const users = await prisma.user.findMany({
-    where: { active: true },
+    where: usersWhere,
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })
