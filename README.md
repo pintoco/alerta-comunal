@@ -208,6 +208,10 @@ alerta-comunal/
 │   │   ├── utils.ts           # Labels, formatters (client-safe, sin Prisma)
 │   │   ├── generate-code.ts   # Generador de códigos EMG (server-only)
 │   │   ├── rate-limit.ts      # Rate limiter en memoria (login brute-force)
+│   │   ├── storage/
+│   │   │   ├── index.ts       # Abstracción: validateFile, saveUpload, deleteUpload
+│   │   │   ├── local.ts       # Provider local (public/uploads)
+│   │   │   └── s3.ts          # Provider MinIO/S3 (@aws-sdk/client-s3)
 │   │   └── validations/       # Schemas Zod
 │   └── types/
 │       └── index.ts           # Interfaces TypeScript
@@ -225,11 +229,80 @@ alerta-comunal/
 - **Race condition en códigos:** La función `generateEmergencyCode()` usa `COUNT` (no atómico). Los endpoints POST de emergencias implementan un loop de reintentos (máx. 3) capturando el error Prisma P2002 en el campo `code`.
 - **DB en Railway:** Se usa `prisma db push` en lugar de `prisma migrate deploy`, ya que no se generan archivos de migración localmente.
 - **NODE_ENV en Railway:** Railway inyecta un valor no estándar en `NODE_ENV` durante el build, lo que hace que Next.js use el runtime de desarrollo y crashee en el pre-rendering. El build script usa `NODE_ENV=production next build` para forzar el runtime de producción correcto. No configurar `NODE_ENV` como variable de servicio en Railway.
-- **Almacenamiento de imágenes:** Railway usa filesystem efímero — las imágenes se pierden en cada redeploy. Para persistencia en producción, configurar un **Railway Volume** montado en `/app/public/uploads`, o migrar a Cloudflare R2 / AWS S3 (ver Roadmap).
+- **Almacenamiento de imágenes:** Railway usa filesystem efímero. Con `STORAGE_PROVIDER=local` las imágenes se pierden en cada redeploy salvo que se use un Railway Volume. Con `STORAGE_PROVIDER=s3` las imágenes se guardan en MinIO/S3 y la URL pública se persiste en PostgreSQL. Ver sección "Almacenamiento de evidencias" más abajo.
+
+## Almacenamiento de evidencias
+
+El sistema soporta dos proveedores. Se selecciona con `STORAGE_PROVIDER`.
+
+### Modo local (por defecto)
+
+Adecuado para desarrollo y prototipos simples.
+
+```env
+STORAGE_PROVIDER=local
+MAX_UPLOAD_SIZE_MB=5
+```
+
+> **Advertencia Railway:** `public/uploads` no es persistente si no se configura un Volume. Los archivos se pierden en cada redeploy. Para persistencia, crea un Volume en Railway montado en `/app/public/uploads`.
+
+### Modo MinIO/S3
+
+Recomendado para Railway en producción o prototipos estables.
+
+```env
+STORAGE_PROVIDER=s3
+S3_ENDPOINT=https://minio.midominio.cl
+S3_REGION=us-east-1
+S3_BUCKET=alerta-comunal-evidencias
+S3_ACCESS_KEY_ID=tu_access_key
+S3_SECRET_ACCESS_KEY=tu_secret_key
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_URL=https://minio.midominio.cl/alerta-comunal-evidencias
+MAX_UPLOAD_SIZE_MB=5
+```
+
+- El bucket debe existir antes del primer deploy. La app **no lo crea automáticamente**.
+- MinIO debe tener acceso público de lectura o una URL pública configurada en `S3_PUBLIC_URL`.
+- La app guarda la URL pública completa en PostgreSQL (`evidence.url`).
+- Las evidencias antiguas con URL `/uploads/...` siguen funcionando (archivos estáticos de Next.js).
+- Si faltan variables S3 críticas, la subida falla con mensaje claro sin romper el servidor.
+
+### Compatibilidad con evidencias antiguas
+
+| Evidencia | `url` guardada | Cómo se muestra |
+|-----------|---------------|-----------------|
+| Local | `/uploads/uuid.jpg` | Servida por Next.js como estático |
+| MinIO/S3 | `https://minio.../uuid.jpg` | URL pública directa |
+
+Al eliminar una evidencia, el sistema detecta automáticamente si es local (URL empieza con `/`) o S3 (URL empieza con `http`) y borra el archivo del lugar correcto.
+
+## Configuración en Railway para MinIO
+
+1. Ir al servicio de AlertaComunal → **Variables**
+2. Agregar las siguientes variables:
+
+```
+STORAGE_PROVIDER=s3
+S3_ENDPOINT=https://minio.midominio.cl
+S3_REGION=us-east-1
+S3_BUCKET=alerta-comunal-evidencias
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_URL=https://minio.midominio.cl/alerta-comunal-evidencias
+MAX_UPLOAD_SIZE_MB=5
+```
+
+3. Redeployar el servicio.
+4. Probar subida desde `/reportar` y desde el detalle de emergencia → pestaña Evidencias.
+5. Verificar que el archivo aparece en el bucket MinIO y que la URL pública abre la imagen.
+
+> No agregar `NODE_ENV` como variable manual en Railway.
 
 ## Roadmap (post-MVP)
 
-- [ ] Upload de imágenes a S3 / Cloudflare R2
+- [x] Upload de imágenes a MinIO/S3 (proveedor configurable)
 - [ ] Notificaciones por correo electrónico
 - [ ] Gestión de usuarios (CRUD desde UI)
 - [ ] Reportes estadísticos exportables

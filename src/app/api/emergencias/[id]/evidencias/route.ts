@@ -47,7 +47,7 @@ export async function POST(
 
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    const { filename, url } = await saveUpload(buffer, file.name)
+    const { filename, url } = await saveUpload(buffer, file.name, file.type)
 
     const evidence = await prisma.evidence.create({
       data: {
@@ -103,7 +103,11 @@ export async function DELETE(
   }
 
   await prisma.evidence.delete({ where: { id: evidenceId } })
-  await deleteUpload(evidence.filename)
+  try {
+    await deleteUpload(evidence.filename, evidence.url)
+  } catch (err) {
+    console.error('[evidencias] Error al borrar archivo físico:', err)
+  }
 
   await prisma.activityLog.create({
     data: {

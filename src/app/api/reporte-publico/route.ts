@@ -158,7 +158,7 @@ export async function POST(request: Request) {
       try {
         const bytes = await photoFile.arrayBuffer()
         const buffer = Buffer.from(bytes)
-        const { filename, url } = await saveUpload(buffer, photoFile.name)
+        const { filename, url } = await saveUpload(buffer, photoFile.name, photoFile.type)
 
         await prisma.evidence.create({
           data: {

@@ -23,7 +23,7 @@ export function getJwtSecret(): string {
 }
 
 export const storageConfig = {
-  provider: (process.env.STORAGE_PROVIDER || 'local') as 'local',
+  provider: (process.env.STORAGE_PROVIDER || 'local') as 'local' | 's3',
   maxSizeMb: parseInt(process.env.MAX_UPLOAD_SIZE_MB || '5', 10),
 }
 

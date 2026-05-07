@@ -1,12 +1,6 @@
-/**
- * Capa de abstracción de almacenamiento de archivos.
- * Provider actual: local (public/uploads).
- * Para migrar a Cloudflare R2 en el futuro, implementar r2.ts y
- * conmutar según STORAGE_PROVIDER=r2 sin cambiar los llamadores.
- */
-
 import { storageConfig } from '../config'
 import * as local from './local'
+import * as s3 from './s3'
 
 export const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 export const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp']
@@ -29,15 +23,28 @@ export function validateFile(mimeType: string, size: number): string | null {
 /** Guarda un archivo subido y retorna filename y url pública. */
 export async function saveUpload(
   buffer: Buffer,
-  originalName: string
+  originalName: string,
+  mimeType?: string
 ): Promise<{ filename: string; url: string }> {
   const rawExt = originalName.split('.').pop()?.toLowerCase() || 'jpg'
   const ext = ALLOWED_EXTENSIONS.includes(rawExt) ? rawExt : 'jpg'
+
+  if (storageConfig.provider === 's3') {
+    const filename = await s3.saveFile(buffer, ext, mimeType)
+    return { filename, url: s3.getPublicUrl(filename) }
+  }
+
   const filename = await local.saveFile(buffer, ext)
   return { filename, url: local.getPublicUrl(filename) }
 }
 
-/** Elimina un archivo del storage. */
-export async function deleteUpload(filename: string): Promise<void> {
+/**
+ * Elimina un archivo del storage.
+ * Si se pasa url, determina el proveedor por ella (http → S3, /uploads/ → local).
+ * Sin url, usa STORAGE_PROVIDER del entorno.
+ */
+export async function deleteUpload(filename: string, url?: string): Promise<void> {
+  const isS3 = url ? url.startsWith('http') : storageConfig.provider === 's3'
+  if (isS3) return s3.deleteFile(filename)
   return local.deleteFile(filename)
 }
