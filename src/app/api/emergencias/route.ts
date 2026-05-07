@@ -4,10 +4,14 @@ import { prisma } from '@/lib/prisma'
 import { generateEmergencyCode } from '@/lib/generate-code'
 import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
+import { getMunicipalityFilter, requireMunicipalityAssigned } from '@/lib/tenant'
 
 export async function GET(request: Request) {
   const session = await requireAuth()
   if (session instanceof NextResponse) return session
+
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
 
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || ''
@@ -16,7 +20,7 @@ export async function GET(request: Request) {
   const type = searchParams.get('type') || ''
   const sector = searchParams.get('sector') || ''
 
-  const where: Record<string, unknown> = {}
+  const where: Record<string, unknown> = { ...getMunicipalityFilter(session) }
 
   if (search) {
     where.OR = [
@@ -50,6 +54,9 @@ export async function POST(request: Request) {
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   try {
     const body = await request.json()
     const result = emergencySchema.safeParse(body)
@@ -63,12 +70,14 @@ export async function POST(request: Request) {
 
     const data = result.data
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.id },
-      select: { municipalityId: true },
-    })
+    // Determinar municipalityId: siempre desde sesión, nunca desde el cliente
+    let municipalityId: string | null = session.municipalityId ?? null
+    if (!municipalityId && session.role === 'ADMIN') {
+      // ADMIN sin municipalidad: usar municipalidad demo si existe
+      const demo = await prisma.municipality.findFirst({ where: { slug: 'demo' }, select: { id: true } })
+      municipalityId = demo?.id ?? null
+    }
 
-    // Retry hasta 3 veces ante colisión de código único (race condition)
     const MAX_ATTEMPTS = 3
     let lastError: unknown
 
@@ -82,7 +91,7 @@ export async function POST(request: Request) {
             code,
             status: data.status || 'NUEVA',
             occurredAt: data.occurredAt ? new Date(data.occurredAt) : null,
-            municipalityId: user?.municipalityId ?? null,
+            municipalityId,
           } as any,
           include: {
             assignedTo: { select: { id: true, name: true, email: true } },
@@ -100,7 +109,6 @@ export async function POST(request: Request) {
 
         return NextResponse.json(emergency, { status: 201 })
       } catch (err) {
-        // P2002: unique constraint violation — reintentar con nuevo código
         if (
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002' &&

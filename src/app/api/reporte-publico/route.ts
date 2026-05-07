@@ -89,15 +89,22 @@ export async function POST(request: Request) {
     const data = result.data
     const code = await generateEmergencyCode()
 
-    // Buscar municipalidad demo
+    // Obtener (o crear) municipalidad demo
     let municipalityId: string | null = null
     try {
-      const municipality = await prisma.municipality.findUnique({
+      const municipality = await prisma.municipality.upsert({
         where: { slug: municipalityConfig.defaultSlug },
+        create: {
+          name: 'Municipalidad Demo',
+          slug: municipalityConfig.defaultSlug,
+          active: true,
+        },
+        update: {},
+        select: { id: true },
       })
-      municipalityId = municipality?.id ?? null
+      municipalityId = municipality.id
     } catch {
-      // Si la tabla no existe, continuar sin municipalidad
+      // Si falla (ej. tabla no existe), continuar sin municipalidad
     }
 
     // Retry ante colisión de código (igual que en emergencias internas)

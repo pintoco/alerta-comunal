@@ -8,8 +8,17 @@ export async function GET() {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 
+  const where: Record<string, unknown> = { active: true }
+
+  if (session.role !== 'ADMIN') {
+    if (!session.municipalityId) {
+      return NextResponse.json([])
+    }
+    where.municipalityId = session.municipalityId
+  }
+
   const users = await prisma.user.findMany({
-    where: { active: true },
+    where,
     select: { id: true, name: true, email: true, role: true },
     orderBy: { name: 'asc' },
   })

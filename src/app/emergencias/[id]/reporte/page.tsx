@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+import { canAccessEmergency } from '@/lib/tenant'
 import {
   EMERGENCY_TYPE_LABELS,
   PRIORITY_LABELS,
@@ -16,6 +18,9 @@ export default async function ReportePage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  const session = await getSession()
+  if (!session) redirect('/login')
+
   const { id } = await params
 
   const emergency = await prisma.emergency.findUnique({
@@ -31,6 +36,10 @@ export default async function ReportePage({
   })
 
   if (!emergency) notFound()
+
+  if (!canAccessEmergency(session, emergency.municipalityId)) {
+    redirect('/emergencias')
+  }
 
   return (
     <>

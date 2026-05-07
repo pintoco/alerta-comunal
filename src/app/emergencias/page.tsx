@@ -9,7 +9,8 @@ import EmergencyTable from '@/components/emergencies/EmergencyTable'
 import EmergencyFilters from '@/components/emergencies/EmergencyFilters'
 import { Suspense } from 'react'
 import Loading from '@/components/ui/Loading'
-import type { Emergency } from '@/types'
+import type { Emergency, Session } from '@/types'
+import { getEmergencyScope } from '@/lib/tenant'
 
 interface PageProps {
   searchParams: Promise<{
@@ -24,11 +25,23 @@ interface PageProps {
 async function EmergencyList({
   searchParams,
   canEdit,
+  session,
 }: {
   searchParams: Awaited<PageProps['searchParams']>
   canEdit: boolean
+  session: Session
 }) {
-  const where: Record<string, unknown> = {}
+  const scope = getEmergencyScope(session)
+
+  if (scope === false) {
+    return (
+      <div className="card p-8 text-center text-gray-500 text-sm">
+        Este usuario no tiene municipalidad asignada. Contacte a un administrador.
+      </div>
+    )
+  }
+
+  const where: Record<string, unknown> = { ...scope }
 
   if (searchParams.search) {
     where.OR = [
@@ -86,7 +99,7 @@ export default async function EmergenciasPage({ searchParams }: PageProps) {
         </Suspense>
 
         <Suspense fallback={<Loading text="Cargando emergencias..." />}>
-          <EmergencyList searchParams={params} canEdit={canEdit} />
+          <EmergencyList searchParams={params} canEdit={canEdit} session={session} />
         </Suspense>
       </div>
     </MainLayout>

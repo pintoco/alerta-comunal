@@ -118,6 +118,7 @@ export interface Session {
   email: string
   name: string
   role: UserRole
+  municipalityId?: string | null
 }
 
 export interface DashboardStats {

@@ -6,15 +6,23 @@ export const dynamic = 'force-dynamic'
 import MainLayout from '@/components/layout/MainLayout'
 import MapWrapper from '@/components/map/MapWrapper'
 import type { Emergency } from '@/types'
+import { getEmergencyScope } from '@/lib/tenant'
 
 export default async function MapaPage() {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const emergencies = await prisma.emergency.findMany({
+  const scope = getEmergencyScope(session)
+
+  const geoBase: Record<string, unknown> = {
+    ...(scope !== false ? scope : {}),
+    latitude: { not: null },
+    longitude: { not: null },
+  }
+
+  const emergencies = scope === false ? [] : await prisma.emergency.findMany({
     where: {
-      latitude: { not: null },
-      longitude: { not: null },
+      ...geoBase,
       status: { notIn: ['CERRADA', 'DESCARTADA'] },
     },
     include: {
@@ -23,13 +31,7 @@ export default async function MapaPage() {
     orderBy: { createdAt: 'desc' },
   })
 
-  const allEmergencies = await prisma.emergency.findMany({
-    where: {
-      latitude: { not: null },
-      longitude: { not: null },
-    },
-    select: { id: true },
-  })
+  const allCount = scope === false ? 0 : await prisma.emergency.count({ where: geoBase })
 
   return (
     <MainLayout>
@@ -61,6 +63,12 @@ export default async function MapaPage() {
           </div>
         </div>
 
+        {scope === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+            Este usuario no tiene municipalidad asignada. Contacte a un administrador.
+          </div>
+        )}
+
         <MapWrapper
           emergencies={emergencies as unknown as Emergency[]}
           height="600px"
@@ -72,8 +80,8 @@ export default async function MapaPage() {
           </svg>
           <span>
             Solo se muestran emergencias activas con coordenadas registradas. Haga clic en un marcador para ver el detalle.
-            {allEmergencies.length > emergencies.length && (
-              <> ({allEmergencies.length - emergencies.length} emergencias cerradas no mostradas)</>
+            {allCount > emergencies.length && (
+              <> ({allCount - emergencies.length} emergencias cerradas no mostradas)</>
             )}
           </span>
         </div>

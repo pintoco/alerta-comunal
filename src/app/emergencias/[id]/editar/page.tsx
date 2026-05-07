@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import MainLayout from '@/components/layout/MainLayout'
 import EmergencyForm from '@/components/emergencies/EmergencyForm'
+import { canAccessEmergency, getEmergencyScope } from '@/lib/tenant'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,16 +18,26 @@ export default async function EditarEmergenciaPage({
 
   const { id } = await params
 
-  const [emergency, users] = await Promise.all([
-    prisma.emergency.findUnique({ where: { id } }),
-    prisma.user.findMany({
-      where: { active: true },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
-  ])
+  const emergency = await prisma.emergency.findUnique({ where: { id } })
 
   if (!emergency) notFound()
+
+  if (!canAccessEmergency(session, emergency.municipalityId)) {
+    redirect('/emergencias')
+  }
+
+  // Usuarios filtrados por municipalidad del usuario (ADMIN ve todos)
+  const scope = getEmergencyScope(session)
+  const usersWhere: Record<string, unknown> = { active: true }
+  if (scope !== false && Object.keys(scope).length > 0) {
+    usersWhere.municipalityId = session.municipalityId
+  }
+
+  const users = await prisma.user.findMany({
+    where: usersWhere,
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  })
 
   return (
     <MainLayout>

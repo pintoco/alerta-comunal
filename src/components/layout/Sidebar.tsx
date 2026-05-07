@@ -56,10 +56,13 @@ const roleLabel: Record<UserRole, string> = {
 interface SidebarProps {
   userRole: UserRole
   userName: string
+  municipalityName?: string | null
 }
 
-export default function Sidebar({ userRole, userName }: SidebarProps) {
+export default function Sidebar({ userRole, userName, municipalityName }: SidebarProps) {
   const pathname = usePathname()
+
+  const contextLabel = municipalityName ?? (userRole === 'ADMIN' ? 'Vista global' : null)
 
   return (
     <aside className="w-64 bg-slate-900 flex flex-col flex-shrink-0 h-full">
@@ -70,9 +73,11 @@ export default function Sidebar({ userRole, userName }: SidebarProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-white font-bold text-sm leading-tight">AlertaComunal</p>
-            <p className="text-slate-400 text-xs">Gestión Municipal</p>
+            {contextLabel && (
+              <p className="text-slate-400 text-xs truncate" title={contextLabel}>{contextLabel}</p>
+            )}
           </div>
         </div>
       </div>

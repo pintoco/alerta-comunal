@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
+import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 
 export async function GET(
   _request: Request,
@@ -10,7 +11,13 @@ export async function GET(
   const session = await requireAuth()
   if (session instanceof NextResponse) return session
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   const emergency = await prisma.emergency.findUnique({
     where: { id },
@@ -46,7 +53,13 @@ export async function PUT(
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   try {
     const body = await request.json()
@@ -114,6 +127,9 @@ export async function DELETE(
   if (denied) return denied
 
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   await prisma.emergency.delete({ where: { id } })
   return NextResponse.json({ success: true })

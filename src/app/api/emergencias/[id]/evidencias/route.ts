@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { validateFile, saveUpload, deleteUpload } from '@/lib/storage'
+import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 
 export async function GET(
   _request: Request,
@@ -10,7 +11,14 @@ export async function GET(
   const session = await requireAuth()
   if (session instanceof NextResponse) return session
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
+
   const evidences = await prisma.evidence.findMany({
     where: { emergencyId: id },
     orderBy: { createdAt: 'desc' },
@@ -29,7 +37,13 @@ export async function POST(
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   try {
     const formData = await request.formData()
@@ -86,7 +100,14 @@ export async function DELETE(
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
+
   const { searchParams } = new URL(request.url)
   const evidenceId = searchParams.get('evidenceId')
 

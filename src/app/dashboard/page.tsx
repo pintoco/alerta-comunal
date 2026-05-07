@@ -7,19 +7,27 @@ import MainLayout from '@/components/layout/MainLayout'
 export const dynamic = 'force-dynamic'
 import StatsCard from '@/components/dashboard/StatsCard'
 import RecentEmergencies from '@/components/dashboard/RecentEmergencies'
-import type { Emergency } from '@/types'
+import type { Emergency, Session } from '@/types'
+import { getEmergencyScope } from '@/lib/tenant'
 
-async function getDashboardData() {
+async function getDashboardData(session: Session) {
+  const scope = getEmergencyScope(session)
+
+  if (scope === false) {
+    return { total: 0, nueva: 0, enAtencion: 0, resuelta: 0, cerrada: 0, descartada: 0, critica: 0, recent: [] }
+  }
+
   const [total, nueva, enAtencion, resuelta, cerrada, descartada, critica, recent] =
     await Promise.all([
-      prisma.emergency.count(),
-      prisma.emergency.count({ where: { status: 'NUEVA' } }),
-      prisma.emergency.count({ where: { status: 'EN_ATENCION' } }),
-      prisma.emergency.count({ where: { status: 'RESUELTA' } }),
-      prisma.emergency.count({ where: { status: 'CERRADA' } }),
-      prisma.emergency.count({ where: { status: 'DESCARTADA' } }),
-      prisma.emergency.count({ where: { priority: 'CRITICA', status: { notIn: ['CERRADA', 'DESCARTADA'] } } }),
+      prisma.emergency.count({ where: scope }),
+      prisma.emergency.count({ where: { ...scope, status: 'NUEVA' } }),
+      prisma.emergency.count({ where: { ...scope, status: 'EN_ATENCION' } }),
+      prisma.emergency.count({ where: { ...scope, status: 'RESUELTA' } }),
+      prisma.emergency.count({ where: { ...scope, status: 'CERRADA' } }),
+      prisma.emergency.count({ where: { ...scope, status: 'DESCARTADA' } }),
+      prisma.emergency.count({ where: { ...scope, priority: 'CRITICA', status: { notIn: ['CERRADA', 'DESCARTADA'] } } }),
       prisma.emergency.findMany({
+        where: scope,
         take: 10,
         orderBy: { createdAt: 'desc' },
         include: { assignedTo: { select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true } } },
@@ -33,7 +41,8 @@ export default async function DashboardPage() {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const data = await getDashboardData()
+  const data = await getDashboardData(session)
+  const noMunicipality = session.role !== 'ADMIN' && !session.municipalityId
 
   const statsConfig = [
     {
@@ -115,6 +124,12 @@ export default async function DashboardPage() {
             </Link>
           )}
         </div>
+
+        {noMunicipality && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+            Este usuario no tiene municipalidad asignada. Contacte a un administrador.
+          </div>
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {statsConfig.map((stat) => (

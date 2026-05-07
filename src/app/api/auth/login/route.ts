@@ -68,9 +68,10 @@ export async function POST(request: Request) {
       email: user.email,
       name: user.name,
       role: user.role,
+      municipalityId: user.municipalityId ?? null,
     }
 
-    const token = await createToken(session as any)
+    const token = await createToken(session)
 
     const response = NextResponse.json({
       success: true,

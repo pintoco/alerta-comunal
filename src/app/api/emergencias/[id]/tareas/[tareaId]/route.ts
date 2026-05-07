@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
+import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 
 export async function PATCH(
   request: Request,
@@ -12,7 +13,13 @@ export async function PATCH(
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id, tareaId } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   try {
     const body = await request.json()
@@ -51,7 +58,13 @@ export async function DELETE(
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id, tareaId } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   try {
     const task = await prisma.task.findUnique({

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { statusUpdateSchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
+import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 
 export async function PATCH(
   request: Request,
@@ -13,7 +14,13 @@ export async function PATCH(
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   try {
     const body = await request.json()

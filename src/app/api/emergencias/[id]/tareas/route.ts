@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { taskSchema } from '@/lib/validations/task'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
+import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 
 export async function GET(
   _request: Request,
@@ -10,7 +11,14 @@ export async function GET(
   const session = await requireAuth()
   if (session instanceof NextResponse) return session
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
+
   const tasks = await prisma.task.findMany({
     where: { emergencyId: id },
     include: { assignedTo: { select: { id: true, name: true } } },
@@ -30,7 +38,13 @@ export async function POST(
   const denied = requireRole(session, MANAGE_ROLES)
   if (denied) return denied
 
+  const noMunicipality = requireMunicipalityAssigned(session)
+  if (noMunicipality) return noMunicipality
+
   const { id } = await params
+
+  const access = await requireEmergencyAccess(session, id)
+  if (access instanceof NextResponse) return access
 
   try {
     const body = await request.json()
