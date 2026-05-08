@@ -4,35 +4,36 @@ import type { Session } from '@/types'
 
 /**
  * Returns Prisma where clause fragment for emergency municipality scoping.
- * ADMIN: {} (no restriction).
- * OPERADOR/VISUALIZADOR with municipalityId: { municipalityId }.
- * OPERADOR/VISUALIZADOR without municipalityId: { id: '__never__' } — returns zero results.
+ * SUPER_ADMIN: {} (global — no restriction).
+ * ADMIN/OPERADOR/VISUALIZADOR with municipalityId: { municipalityId }.
+ * ADMIN/OPERADOR/VISUALIZADOR without municipalityId: { id: '__never__' } — returns zero results.
  * Always call requireMunicipalityAssigned first in API routes to get a proper 403 instead.
  */
 export function getMunicipalityFilter(session: Session): Record<string, unknown> {
-  if (session.role === 'ADMIN') return {}
+  if (session.role === 'SUPER_ADMIN') return {}
   if (session.municipalityId) return { municipalityId: session.municipalityId }
-  // Non-ADMIN without municipality: safe fallback that returns no results
   return { id: '__never__' }
 }
 
 /**
- * For non-ADMIN users without municipalityId, returns 403.
+ * For non-SUPER_ADMIN users without municipalityId, returns 403.
  * Call at the start of protected API routes.
  */
 export function requireMunicipalityAssigned(session: Session): NextResponse | null {
-  if (session.role !== 'ADMIN' && !session.municipalityId) {
-    return NextResponse.json(
-      { error: 'Usuario sin municipalidad asignada.' },
-      { status: 403 }
-    )
+  if (session.role === 'SUPER_ADMIN') return null
+  if (!session.municipalityId) {
+    const msg =
+      session.role === 'ADMIN'
+        ? 'Administrador sin municipalidad asignada. Contacte al Super Administrador.'
+        : 'Usuario sin municipalidad asignada. Contacte a un administrador.'
+    return NextResponse.json({ error: msg }, { status: 403 })
   }
   return null
 }
 
 /** Whether session can access an emergency with the given municipalityId */
 export function canAccessEmergency(session: Session, emergencyMunicipalityId: string | null): boolean {
-  if (session.role === 'ADMIN') return true
+  if (session.role === 'SUPER_ADMIN') return true
   if (!session.municipalityId) return false
   return emergencyMunicipalityId === session.municipalityId
 }
@@ -69,7 +70,7 @@ export async function requireEmergencyAccess(
  * Returns Prisma where clause or false when user has no municipality assigned.
  */
 export function getEmergencyScope(session: Session): Record<string, unknown> | false {
-  if (session.role === 'ADMIN') return {}
+  if (session.role === 'SUPER_ADMIN') return {}
   if (!session.municipalityId) return false
   return { municipalityId: session.municipalityId }
 }

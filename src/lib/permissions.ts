@@ -6,10 +6,6 @@ export async function getCurrentUser(): Promise<Session | null> {
   return getSession()
 }
 
-/**
- * Verifica autenticación. Retorna Session si ok, NextResponse 401 si no.
- * Uso: const s = await requireAuth(); if (s instanceof NextResponse) return s
- */
 export async function requireAuth(): Promise<Session | NextResponse> {
   const session = await getSession()
   if (!session) {
@@ -18,10 +14,6 @@ export async function requireAuth(): Promise<Session | NextResponse> {
   return session
 }
 
-/**
- * Verifica que session tenga uno de los roles requeridos.
- * Retorna NextResponse 403 si no tiene permiso, null si está autorizado.
- */
 export function requireRole(session: Session, roles: UserRole[]): NextResponse | null {
   if (!roles.includes(session.role)) {
     return NextResponse.json(
@@ -32,13 +24,49 @@ export function requireRole(session: Session, roles: UserRole[]): NextResponse |
   return null
 }
 
+export async function requireSuperAdmin(): Promise<Session | NextResponse> {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+  if (session.role !== 'SUPER_ADMIN') {
+    return NextResponse.json(
+      { error: 'Acceso restringido a Super Administradores' },
+      { status: 403 }
+    )
+  }
+  return session
+}
+
+export function isSuperAdmin(session: Session): boolean {
+  return session.role === 'SUPER_ADMIN'
+}
+
+export function isMunicipalityAdmin(session: Session): boolean {
+  return session.role === 'ADMIN'
+}
+
 export function isViewer(session: Session): boolean {
   return session.role === 'VISUALIZADOR'
 }
 
-export function canManageEmergencies(session: Session): boolean {
-  return session.role === 'ADMIN' || session.role === 'OPERADOR'
+export function canManageMunicipalities(session: Session): boolean {
+  return session.role === 'SUPER_ADMIN'
 }
 
-/** Roles con permiso para crear/editar/eliminar */
-export const MANAGE_ROLES: UserRole[] = ['ADMIN', 'OPERADOR']
+export function canManageUsers(session: Session): boolean {
+  return session.role === 'SUPER_ADMIN' || session.role === 'ADMIN'
+}
+
+export function canManageUsersInMunicipality(session: Session, municipalityId: string): boolean {
+  if (session.role === 'SUPER_ADMIN') return true
+  if (session.role === 'ADMIN') return session.municipalityId === municipalityId
+  return false
+}
+
+export function canManageEmergencies(session: Session): boolean {
+  return session.role === 'SUPER_ADMIN' || session.role === 'ADMIN' || session.role === 'OPERADOR'
+}
+
+/** Roles con permiso para crear/editar/eliminar emergencias */
+export const MANAGE_ROLES: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'OPERADOR']

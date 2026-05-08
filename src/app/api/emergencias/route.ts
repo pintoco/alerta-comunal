@@ -81,8 +81,8 @@ export async function POST(request: Request) {
 
     // Determinar municipalityId: siempre desde sesión, nunca desde el cliente
     let municipalityId: string | null = session.municipalityId ?? null
-    if (!municipalityId && session.role === 'ADMIN') {
-      // ADMIN sin municipalidad: usar municipalidad demo si existe
+    if (!municipalityId && session.role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN sin municipalidad propia: asignar municipalidad demo como fallback
       const demo = await prisma.municipality.findFirst({ where: { slug: 'demo' }, select: { id: true } })
       municipalityId = demo?.id ?? null
     }

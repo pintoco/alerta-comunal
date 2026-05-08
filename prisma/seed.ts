@@ -28,13 +28,28 @@ async function main() {
   })
   console.log(`  ✓ Municipalidad: ${municipality.name} (${municipality.slug})`)
 
-  // Usuarios (upsert — no duplica, actualiza municipalityId si ya existe)
+  // SUPER_ADMIN (sin municipalidad)
+  const superAdminPassword = await bcrypt.hash('SuperAdmin123', 10)
+  await prisma.user.upsert({
+    where: { email: 'superadmin@alertacomunal.cl' },
+    update: { role: UserRole.SUPER_ADMIN, active: true },
+    create: {
+      name: 'Super Administrador',
+      email: 'superadmin@alertacomunal.cl',
+      password: superAdminPassword,
+      role: UserRole.SUPER_ADMIN,
+      municipalityId: null,
+      active: true,
+    },
+  })
+
+  // ADMIN municipal
   const adminPassword = await bcrypt.hash('Admin123456', 10)
   const admin = await prisma.user.upsert({
     where: { email: 'ppinto@elementalpro.cl' },
-    update: { municipalityId: municipality.id },
+    update: { municipalityId: municipality.id, role: UserRole.ADMIN },
     create: {
-      name: 'Administrador',
+      name: 'Administrador Municipal',
       email: 'ppinto@elementalpro.cl',
       password: adminPassword,
       role: UserRole.ADMIN,
@@ -81,7 +96,7 @@ async function main() {
     },
   })
 
-  console.log('  ✓ 4 usuarios creados/actualizados')
+  console.log('  ✓ 5 usuarios creados/actualizados')
 
   // Emergencias de ejemplo (solo crea si no existen por código)
   const emergenciesData = [
@@ -236,10 +251,11 @@ async function main() {
   console.log(`  ✓ ${created} emergencias creadas (${5 - created} ya existían)`)
   console.log('')
   console.log('Seed completado. Credenciales demo:')
-  console.log('  ADMIN      ppinto@elementalpro.cl         / Admin123456')
-  console.log('  OPERADOR   mgonzalez@alertacomunal.cl     / Operador123')
-  console.log('  OPERADOR   cmartinez@alertacomunal.cl     / Operador123')
-  console.log('  VISUALIZADOR visualizador@alertacomunal.cl / Visualizador123')
+  console.log('  SUPER_ADMIN  superadmin@alertacomunal.cl     / SuperAdmin123')
+  console.log('  ADMIN        ppinto@elementalpro.cl           / Admin123456')
+  console.log('  OPERADOR     mgonzalez@alertacomunal.cl       / Operador123')
+  console.log('  OPERADOR     cmartinez@alertacomunal.cl       / Operador123')
+  console.log('  VISUALIZADOR visualizador@alertacomunal.cl   / Visualizador123')
 }
 
 main()

@@ -31,6 +31,60 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 - Historial de actividad completo (creación, cambios de estado, tareas, evidencias)
 - Filtros avanzados de búsqueda (estado, prioridad, tipo, sector, texto libre)
 
+## Administración SaaS
+
+### Roles del sistema
+
+| Rol | Descripción | Scope |
+|-----|-------------|-------|
+| `SUPER_ADMIN` | Administra toda la plataforma | Global — ve todas las municipalidades |
+| `ADMIN` | Administra su municipalidad | Municipal — solo su municipalidad |
+| `OPERADOR` | Gestiona emergencias | Municipal — solo su municipalidad |
+| `VISUALIZADOR` | Solo consulta | Municipal — solo su municipalidad |
+
+### Panel de Super Administrador (`/admin`)
+
+Disponible solo para `SUPER_ADMIN`. Incluye:
+
+- **Dashboard global**: total de municipalidades, usuarios y emergencias en toda la plataforma
+- **Municipalidades** (`/admin/municipalidades`): listado, crear, editar, activar/desactivar
+- **Usuarios** (`/admin/usuarios`): listado global, crear, editar rol/municipalidad, activar/desactivar, cambiar contraseña
+
+### Gestión de municipalidades
+
+Campos: nombre, slug (único), región, comuna, activo.
+
+Reglas:
+- El slug solo puede contener letras minúsculas, números y guiones (ej: `santiago-sur`)
+- No se permite borrado físico — solo activar/desactivar
+- Si se desactiva una municipalidad, sus usuarios siguen en la DB pero no deben operar
+- El slug no debe cambiarse si está en uso como `PUBLIC_DEFAULT_MUNICIPALITY_SLUG`
+
+### Gestión de usuarios
+
+Campos: nombre, email, contraseña (al crear), rol, municipalidad, activo.
+
+Reglas:
+- `SUPER_ADMIN` puede crear usuarios de cualquier rol
+- `ADMIN`, `OPERADOR` y `VISUALIZADOR` **requieren** `municipalityId`
+- `SUPER_ADMIN` opera sin municipalidad asignada
+- No se permite borrado físico de usuarios
+
+### Scope por municipalidad
+
+- `SUPER_ADMIN` ve emergencias, usuarios y métricas de **todas** las municipalidades
+- `ADMIN` ve solo los datos de **su municipalidad**
+- `OPERADOR` y `VISUALIZADOR` igual
+- Un usuario sin municipalidad asignada (no `SUPER_ADMIN`) recibe 403 en todas las operaciones
+
+### Cómo agregar una nueva municipalidad
+
+1. Iniciar sesión como `SUPER_ADMIN`
+2. Ir a `/admin/municipalidades` → **Nueva municipalidad**
+3. Completar nombre, slug, región, comuna
+4. Crear usuarios `ADMIN`, `OPERADOR` y `VISUALIZADOR` asignados a esa municipalidad
+5. El admin municipal puede iniciar sesión y gestionar emergencias de su municipalidad
+
 ## Demo municipal
 
 AlertaComunal incluye un conjunto de funcionalidades orientadas a la presentación ante municipios y servicios públicos.
@@ -230,12 +284,13 @@ Railway detecta el push a `main` y despliega automáticamente. El primer deploy 
 
 ## Usuarios demo
 
-| Email | Contraseña | Rol | Permisos |
-|-------|-----------|-----|----------|
-| `ppinto@elementalpro.cl` | `Admin123456` | ADMIN | Todo |
-| `mgonzalez@alertacomunal.cl` | `Operador123` | OPERADOR | Crear/editar emergencias, tareas y evidencias |
-| `cmartinez@alertacomunal.cl` | `Operador123` | OPERADOR | Crear/editar emergencias, tareas y evidencias |
-| `visualizador@alertacomunal.cl` | `Visualizador123` | VISUALIZADOR | Solo lectura |
+| Email | Contraseña | Rol | Scope |
+|-------|-----------|-----|-------|
+| `superadmin@alertacomunal.cl` | `SuperAdmin123` | SUPER_ADMIN | Global — gestiona toda la plataforma |
+| `ppinto@elementalpro.cl` | `Admin123456` | ADMIN | Municipalidad Demo |
+| `mgonzalez@alertacomunal.cl` | `Operador123` | OPERADOR | Municipalidad Demo |
+| `cmartinez@alertacomunal.cl` | `Operador123` | OPERADOR | Municipalidad Demo |
+| `visualizador@alertacomunal.cl` | `Visualizador123` | VISUALIZADOR | Municipalidad Demo |
 
 **Formulario ciudadano público:** `/reportar` (no requiere login)
 **Consulta de estado:** `/consulta` (no requiere login — ingrese el código de seguimiento)

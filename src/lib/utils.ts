@@ -51,7 +51,8 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
-  ADMIN: 'Administrador',
+  SUPER_ADMIN: 'Super Administrador',
+  ADMIN: 'Administrador municipal',
   OPERADOR: 'Operador',
   VISUALIZADOR: 'Visualizador',
 }

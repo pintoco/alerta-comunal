@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'OPERADOR' | 'VISUALIZADOR'
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'OPERADOR' | 'VISUALIZADOR'
 
 export type EmergencyType =
   | 'INCENDIO'
