@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     const municipality = await prisma.municipality.create({
-      data: { name, slug, region: region ?? null, commune: commune ?? null, active },
+      data: { name, slug, region: region || null, commune: commune || null, active },
     })
 
     return NextResponse.json(municipality, { status: 201 })

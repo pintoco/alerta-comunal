@@ -59,9 +59,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
     }
 
+    const { region, commune, ...rest } = result.data
     const municipality = await prisma.municipality.update({
       where: { id },
-      data: result.data,
+      data: {
+        ...rest,
+        ...(region !== undefined && { region: region || null }),
+        ...(commune !== undefined && { commune: commune || null }),
+      },
     })
 
     return NextResponse.json(municipality)
