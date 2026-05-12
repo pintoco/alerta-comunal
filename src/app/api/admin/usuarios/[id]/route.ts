@@ -13,7 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     where: { id },
     select: {
       id: true, name: true, email: true, role: true, active: true,
-      municipalityId: true,
+      municipalityId: true, emailOnAssigned: true, emailOnNewReport: true,
       municipality: { select: { id: true, name: true } },
       createdAt: true, updatedAt: true,
     },
@@ -60,7 +60,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       data: result.data,
       select: {
         id: true, name: true, email: true, role: true, active: true,
-        municipalityId: true, updatedAt: true,
+        municipalityId: true, emailOnAssigned: true, emailOnNewReport: true, updatedAt: true,
       },
     })
 

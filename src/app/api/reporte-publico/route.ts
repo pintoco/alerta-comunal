@@ -250,7 +250,7 @@ export async function POST(request: Request) {
     if (isEmailEnabled() && municipalityId) {
       try {
         const admins = await prisma.user.findMany({
-          where: { municipalityId, role: 'ADMIN', active: true },
+          where: { municipalityId, role: 'ADMIN', active: true, emailOnNewReport: true },
           select: { email: true, name: true },
         })
 

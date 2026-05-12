@@ -65,7 +65,7 @@ function EditUserForm({
   municipalities,
 }: {
   userId: string
-  initialData: { name: string; email: string; role: string; municipalityId: string | null; active: boolean }
+  initialData: { name: string; email: string; role: string; municipalityId: string | null; active: boolean; emailOnAssigned: boolean; emailOnNewReport: boolean }
   municipalities: Municipality[]
 }) {
   const router = useRouter()
@@ -79,6 +79,8 @@ function EditUserForm({
       role: initialData.role as UpdateValues['role'],
       municipalityId: initialData.municipalityId,
       active: initialData.active,
+      emailOnAssigned: initialData.emailOnAssigned,
+      emailOnNewReport: initialData.emailOnNewReport,
     },
   })
 
@@ -165,13 +167,31 @@ function FormFields({
         <input type="checkbox" id="active" {...register('active')} className="w-4 h-4 rounded" />
         <label htmlFor="active" className="text-sm text-gray-700">Usuario activo</label>
       </div>
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Notificaciones por correo</p>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <input type="checkbox" id="emailOnAssigned" {...register('emailOnAssigned')} className="w-4 h-4 rounded mt-0.5" />
+            <label htmlFor="emailOnAssigned" className="text-sm text-gray-700">
+              Recibir correo al ser asignado como responsable de una emergencia
+            </label>
+          </div>
+          <div className="flex items-start gap-3">
+            <input type="checkbox" id="emailOnNewReport" {...register('emailOnNewReport')} className="w-4 h-4 rounded mt-0.5" />
+            <label htmlFor="emailOnNewReport" className="text-sm text-gray-700">
+              Recibir correo cuando se recibe un reporte ciudadano
+              <span className="ml-1 text-xs text-gray-400">(solo aplica a Administradores municipales)</span>
+            </label>
+          </div>
+        </div>
+      </div>
     </>
   )
 }
 
 type Props =
   | { mode: 'create'; municipalities: Municipality[] }
-  | { mode: 'edit'; userId: string; initialData: { name: string; email: string; role: string; municipalityId: string | null; active: boolean }; municipalities: Municipality[] }
+  | { mode: 'edit'; userId: string; initialData: { name: string; email: string; role: string; municipalityId: string | null; active: boolean; emailOnAssigned: boolean; emailOnNewReport: boolean }; municipalities: Municipality[] }
 
 export default function UserForm(props: Props) {
   if (props.mode === 'create') {

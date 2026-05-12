@@ -81,6 +81,9 @@ model User {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  emailOnAssigned    Boolean @default(true)
+  emailOnNewReport   Boolean @default(true)
+
   assignedEmergencies Emergency[]   @relation("AssignedTo")
   activityLogs        ActivityLog[]
   tasks               Task[]

@@ -42,6 +42,12 @@ Verificar que el README documente todas las variables necesarias en Railway:
 - [ ] `S3_FORCE_PATH_STYLE`
 - [ ] `S3_PUBLIC_URL`
 
+**Opcionales (degradación graceful si no están):**
+- [ ] `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — sin ella el autocompletado de dirección se omite, el formulario sigue funcionando
+- [ ] `RESEND_API_KEY` — obligatoria solo si `EMAIL_ENABLED=true`
+- [ ] `EMAIL_FROM` — default `tecnico@elementalpro.cl`
+- [ ] `EMAIL_ENABLED` — default `false`; si `true`, verificar que el dominio esté validado en Resend
+
 **Prohibida:**
 - [ ] `NODE_ENV` NO debe estar como variable manual en Railway (Railway la inyecta con valor no estándar)
 
@@ -155,7 +161,9 @@ Verificar `/reportar` y `/consulta`:
 - [ ] Funciona sin login
 - [ ] Foto es opcional (formulario funciona sin foto)
 - [ ] Crea emergencia con `status: NUEVA`, `priority: MEDIA`, `origin: CIUDADANO`
-- [ ] Asigna `municipalityId` de la municipalidad demo (upsert automático)
+- [ ] Auto-asigna municipalidad por match de `region` + `commune` en tabla `Municipality` (activas)
+- [ ] Si no hay match por región/comuna, hace upsert de municipalidad demo (`PUBLIC_DEFAULT_MUNICIPALITY_SLUG`)
+- [ ] Registra `MUNICIPALITY_ASSIGNED` en ActivityLog indicando si fue por match o por fallback
 - [ ] Genera código único (`EMG-YYYY-XXXX`)
 - [ ] Retorna el código al ciudadano
 - [ ] Registra en `ActivityLog`
@@ -175,12 +183,16 @@ Confirmar que se registra en:
 
 - [ ] Creación de emergencia (`CREATED`)
 - [ ] Cambio de estado (`STATUS_CHANGED`)
+- [ ] Actualización de responsable (`ASSIGNED`)
 - [ ] Creación de tarea (`TASK_CREATED`)
 - [ ] Cambio de estado de tarea (`TASK_STATUS_CHANGED`)
 - [ ] Eliminación de tarea (`TASK_DELETED`)
 - [ ] Subida de evidencia (`EVIDENCE_ADDED`)
 - [ ] Eliminación de evidencia (`EVIDENCE_DELETED`)
-- [ ] Reporte ciudadano recibido (`CREATED` con origen CIUDADANO)
+- [ ] Reporte ciudadano recibido (`CREATED` con origen `CIUDADANO`)
+- [ ] Asignación de municipalidad (`MUNICIPALITY_ASSIGNED`)
+- [ ] Correo enviado (`EMAIL_SENT`) — solo si `EMAIL_ENABLED=true`
+- [ ] Fallo de correo (`EMAIL_FAILED`) — no bloquea la operación principal
 
 ---
 

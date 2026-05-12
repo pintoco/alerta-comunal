@@ -27,6 +27,9 @@ Stack actual:
 - Evidencias internas y ciudadanas
 - ActivityLog
 - Modelo Municipality para separación por municipalidad
+- Google Maps Places Autocomplete (`@googlemaps/js-api-loader`) — geocodificación de dirección, degradación graceful si no hay API key
+- Resend (`resend`) — notificaciones por correo a ADMIN y usuarios asignados
+- Rate limiting en `/api/auth/login` (máximo 5 intentos por IP en 15 minutos)
 
 ## Reglas obligatorias
 
@@ -73,6 +76,10 @@ Cada vez que se revise o mejore el proyecto, verificar:
   - `S3_SECRET_ACCESS_KEY`
   - `S3_FORCE_PATH_STYLE`
   - `S3_PUBLIC_URL`
+  - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (opcional — sin ella el autocompletado de dirección se omite sin romper el formulario)
+  - `RESEND_API_KEY` (obligatoria solo si `EMAIL_ENABLED=true`)
+  - `EMAIL_FROM` (default: `tecnico@elementalpro.cl`)
+  - `EMAIL_ENABLED` (default: `false`)
 
 ### Prisma
 
@@ -115,7 +122,7 @@ Cada vez que se revise o mejore el proyecto, verificar:
 - Listado debe respetar scope municipal.
 - Mapa debe respetar scope municipal.
 - Detalle, edición, tareas y evidencias deben validar acceso.
-- `/reportar` debe asignar `PUBLIC_DEFAULT_MUNICIPALITY_SLUG`.
+- `/reportar` debe auto-asignar municipalidad por región/comuna (match en tabla `Municipality`). Si no hay coincidencia, usar municipalidad con slug `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` como fallback (upsert).
 - `/consulta` no debe exponer datos sensibles.
 
 ### MinIO/S3
@@ -160,14 +167,18 @@ Cada vez que se revise o mejore el proyecto, verificar:
 ### ActivityLog
 
 Debe registrar:
-- creación de emergencia
-- cambio de estado
-- creación de tarea
-- cambio de estado de tarea
-- eliminación de tarea
-- subida de evidencia
-- eliminación de evidencia
-- creación de reporte ciudadano
+- creación de emergencia (`CREATED`)
+- cambio de estado (`STATUS_CHANGED`)
+- actualización de responsable (`ASSIGNED`)
+- creación de tarea (`TASK_CREATED`)
+- cambio de estado de tarea (`TASK_STATUS_CHANGED`)
+- eliminación de tarea (`TASK_DELETED`)
+- subida de evidencia (`EVIDENCE_ADDED`)
+- eliminación de evidencia (`EVIDENCE_DELETED`)
+- creación de reporte ciudadano (`CREATED` con origen `CIUDADANO`)
+- asignación automática de municipalidad (`MUNICIPALITY_ASSIGNED`)
+- correo enviado exitosamente (`EMAIL_SENT`)
+- fallo al enviar correo (`EMAIL_FAILED`) — no debe bloquear la operación principal
 
 ## Procedimiento al hacer una mejora
 

@@ -143,10 +143,10 @@ export async function POST(request: Request) {
       try {
         const assignedUser = await prisma.user.findUnique({
           where: { id: data.assignedToId },
-          select: { name: true, email: true, active: true },
+          select: { name: true, email: true, active: true, emailOnAssigned: true },
         })
 
-        if (assignedUser?.active && assignedUser.email) {
+        if (assignedUser?.active && assignedUser.email && assignedUser.emailOnAssigned) {
           const emailResult = await sendEmergencyAssignmentEmail(assignedUser.email, {
             id: emergency.id,
             code: emergency.code,

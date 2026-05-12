@@ -150,9 +150,14 @@ export default function ReportarPage() {
               <p className="text-slate-400 text-xs">Municipalidad</p>
             </div>
           </div>
-          <a href="/consulta" className="text-slate-300 hover:text-white text-xs underline">
-            Consultar reporte
-          </a>
+          <div className="flex items-center gap-4 text-xs">
+            <a href="/mapa-publico" className="text-slate-300 hover:text-white underline">
+              Ver mapa
+            </a>
+            <a href="/consulta" className="text-slate-300 hover:text-white underline">
+              Consultar reporte
+            </a>
+          </div>
         </div>
       </header>
 

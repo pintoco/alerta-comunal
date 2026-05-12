@@ -21,16 +21,19 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 ## Funcionalidades
 
 - Login seguro con roles (ADMIN, OPERADOR, VISUALIZADOR) y rate limiting (5 intentos / 15 min)
-- Dashboard con estadísticas en tiempo real
+- Dashboard con estadísticas en tiempo real y KPIs operacionales
 - CRUD completo de emergencias con código automático (EMG-2026-XXXX)
-- Mapa interactivo con marcadores por prioridad
-- Subida de evidencias fotográficas (almacenamiento local o MinIO/S3)
+- Mapa interactivo con marcadores por prioridad (interno y público)
+- Subida de evidencias fotográficas (almacenamiento local o MinIO/S3) con limpieza automática al eliminar emergencias
 - Gestión de tareas por emergencia con auditoría de cambios
 - Formulario ciudadano público en `/reportar` (sin login) con ubicación GPS, geocodificación y foto opcional
+- Mapa público ciudadano en `/mapa-publico` (sin login) con emergencias activas en tiempo real
 - Consulta pública de estado de reporte en `/consulta` (sin login)
-- Reporte imprimible y exportable a PDF por emergencia
-- Historial de actividad completo (creación, cambios de estado, tareas, evidencias)
-- Filtros avanzados de búsqueda (estado, prioridad, tipo, sector, texto libre)
+- Reporte imprimible y exportable a PDF por emergencia, con historial completo y bloque de firma
+- Exportación CSV con todos los filtros activos
+- Historial de actividad completo (creación, cambios de estado, tareas, evidencias, correos)
+- Filtros avanzados de búsqueda (estado, prioridad, tipo, sector, rango de fechas, texto libre)
+- Notificaciones por correo con preferencias configurables por usuario
 
 ## Administración SaaS
 
@@ -63,13 +66,14 @@ Reglas:
 
 ### Gestión de usuarios
 
-Campos: nombre, email, contraseña (al crear), rol, municipalidad, activo.
+Campos: nombre, email, contraseña (al crear), rol, municipalidad, activo, preferencias de notificación.
 
 Reglas:
 - `SUPER_ADMIN` puede crear usuarios de cualquier rol
 - `ADMIN`, `OPERADOR` y `VISUALIZADOR` **requieren** `municipalityId`
 - `SUPER_ADMIN` opera sin municipalidad asignada
 - No se permite borrado físico de usuarios
+- Cada usuario puede configurar `emailOnAssigned` y `emailOnNewReport` (ambos activos por defecto)
 
 ### Scope por municipalidad
 
@@ -139,7 +143,20 @@ El reporte de cada emergencia (`/emergencias/[id]/reporte`) está diseñado para
 - Mini-mapa Leaflet con pin arrastrable para ajuste fino de ubicación
 - Foto opcional (se sube a MinIO/S3 o almacenamiento local)
 - Genera código único de seguimiento (EMG-YYYY-XXXX)
-- Asigna automáticamente la municipalidad demo
+- Asigna automáticamente la municipalidad activa por región/comuna, o la municipalidad demo como fallback
+- Header con links a Ver mapa (`/mapa-publico`) y Consultar reporte (`/consulta`)
+
+### Mapa público ciudadano (`/mapa-publico`)
+
+- Acceso público sin login, sin datos sensibles
+- Muestra todas las emergencias activas (NUEVA, EN_ATENCIÓN) con coordenadas
+- Tarjetas de estadísticas: total activas, nuevas, en atención
+- Leyenda de prioridad por colores (verde/amarillo/naranja/rojo)
+- Mapa Leaflet con marcadores por prioridad (igual que el mapa interno)
+- Tabla listado bajo el mapa: código, título, tipo, dirección, estado
+- Filtrado por municipalidad vía `PUBLIC_DEFAULT_MUNICIPALITY_SLUG`
+- Máximo 300 emergencias por consulta, ordenadas por fecha de creación desc
+- No expone datos de reportantes ni campos internos
 
 ### Consulta ciudadana (`/consulta`)
 
@@ -322,23 +339,34 @@ Railway detecta el push a `main` y despliega automáticamente. El primer deploy 
 ```
 alerta-comunal/
 ├── prisma/
-│   ├── schema.prisma          # Modelos: User, Emergency, Task, Evidence, ActivityLog...
-│   └── seed.ts                # Admin + operadores + emergencias de ejemplo
+│   ├── schema.prisma          # Modelos: User, Emergency, Task, Evidence, ActivityLog, Municipality
+│   └── seed.ts                # Admin + operadores + municipalidades + emergencias de ejemplo
 ├── public/
 │   └── uploads/               # Imágenes subidas localmente (gitignored)
 ├── src/
 │   ├── app/
-│   │   ├── api/               # API Routes (auth, emergencias, tareas, evidencias, reportes)
-│   │   ├── dashboard/         # Dashboard con estadísticas
+│   │   ├── api/
+│   │   │   ├── auth/          # Login, logout, session
+│   │   │   ├── emergencias/   # CRUD emergencias + estado + export CSV
+│   │   │   ├── tareas/        # CRUD tareas por emergencia
+│   │   │   ├── evidencias/    # Subida y eliminación de evidencias
+│   │   │   ├── reporte-publico/ # GET (consulta por código) + POST (nuevo reporte ciudadano)
+│   │   │   ├── mapa-publico/  # GET emergencias activas (público, sin auth)
+│   │   │   ├── dashboard/     # KPIs y estadísticas
+│   │   │   └── admin/         # CRUD municipalidades y usuarios (SUPER_ADMIN)
+│   │   ├── dashboard/         # Dashboard con estadísticas en tiempo real
 │   │   ├── emergencias/       # Listado, nueva, detalle, editar, reporte PDF
-│   │   ├── mapa/              # Vista de mapa interactivo
+│   │   ├── mapa/              # Mapa interactivo interno (requiere login)
+│   │   ├── mapa-publico/      # Mapa público ciudadano (sin login)
 │   │   ├── reportar/          # Formulario público ciudadano (con geocodificación y foto)
 │   │   ├── consulta/          # Consulta pública de estado por código
+│   │   ├── admin/             # Panel SUPER_ADMIN: municipalidades y usuarios
 │   │   ├── login/             # Autenticación
 │   │   ├── not-found.tsx      # Página 404
 │   │   └── layout.tsx         # Layout raíz
 │   ├── components/
-│   │   ├── dashboard/         # StatsCard, RecentEmergencies
+│   │   ├── admin/             # UserForm, MunicipalityForm (con preferencias de notificación)
+│   │   ├── dashboard/         # StatsCard, RecentEmergencies, KPICards
 │   │   ├── emergencies/       # EmergencyForm, EmergencyTable, EmergencyFilters,
 │   │   │                      # TaskList, EvidenceGallery, PrintButtons,
 │   │   │                      # LocationPicker (GPS+geocoding+mapa), MiniMap (Leaflet)
@@ -347,7 +375,11 @@ alerta-comunal/
 │   │   └── ui/                # Button, Modal, Alert, Loading
 │   ├── lib/
 │   │   ├── auth.ts            # JWT / sesión (jose)
+│   │   ├── config.ts          # Configuración centralizada (municipalityConfig)
+│   │   ├── email.ts           # Resend: sendEmergencyAssignmentEmail, sendMunicipalityNewReportEmail
+│   │   ├── permissions.ts     # requireAuth, requireRole, MANAGE_ROLES
 │   │   ├── prisma.ts          # Singleton cliente Prisma
+│   │   ├── tenant.ts          # getMunicipalityFilter, requireMunicipalityAssigned
 │   │   ├── utils.ts           # Labels, formatters (client-safe, sin Prisma)
 │   │   ├── generate-code.ts   # Generador de códigos EMG (server-only)
 │   │   ├── rate-limit.ts      # Rate limiter en memoria (login brute-force)
@@ -355,7 +387,9 @@ alerta-comunal/
 │   │   │   ├── index.ts       # Abstracción: validateFile, saveUpload, deleteUpload
 │   │   │   ├── local.ts       # Provider local (public/uploads)
 │   │   │   └── s3.ts          # Provider MinIO/S3 (@aws-sdk/client-s3)
-│   │   └── validations/       # Schemas Zod
+│   │   └── validations/       # Schemas Zod (emergency, user, municipality)
+│   ├── data/
+│   │   └── chile-regions-communes.ts  # Dataset oficial de regiones y comunas de Chile
 │   └── types/
 │       └── index.ts           # Interfaces TypeScript
 ├── middleware.ts               # Protección de rutas JWT
@@ -459,9 +493,20 @@ AlertaComunal usa [Resend](https://resend.com) para notificaciones automáticas 
 
 ### Correos que se envían
 
-1. **Nuevo reporte ciudadano** — Al crear un reporte desde `/reportar`, se envía al(los) `ADMIN` activo(s) de la municipalidad asignada. Incluye código, tipo, prioridad, datos del reportante, descripción y link al detalle interno.
+1. **Nuevo reporte ciudadano** — Al crear un reporte desde `/reportar`, se envía al(los) `ADMIN` activo(s) de la municipalidad asignada **que tengan habilitada la preferencia `emailOnNewReport`**. Incluye código, tipo, prioridad, datos del reportante, descripción y link al detalle interno.
 
-2. **Asignación de emergencia** — Al crear o editar una emergencia y asignar un responsable nuevo, se envía a ese usuario. Incluye código, tipo, prioridad, dirección y link directo.
+2. **Asignación de emergencia** — Al crear o editar una emergencia y asignar un responsable nuevo, se envía a ese usuario **si tiene habilitada la preferencia `emailOnAssigned`**. Incluye código, tipo, prioridad, dirección y link directo.
+
+### Preferencias de notificación por usuario
+
+Cada usuario puede configurar qué correos recibe desde `/admin/usuarios/[id]/editar`:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `emailOnAssigned` | Boolean (default: `true`) | Recibir correo al ser asignado como responsable de una emergencia |
+| `emailOnNewReport` | Boolean (default: `true`) | Recibir correo cuando se recibe un reporte ciudadano (solo aplica a ADMINs) |
+
+Las preferencias se guardan en la tabla `User` y se respetan en todos los envíos de correo. Al crear un usuario, ambas preferencias están activadas por defecto.
 
 ### Comportamiento ante fallos
 
@@ -470,13 +515,16 @@ AlertaComunal usa [Resend](https://resend.com) para notificaciones automáticas 
 - Si `EMAIL_ENABLED=false`: no se intenta enviar ningún correo.
 - Si no hay administradores activos en la municipalidad: se registra advertencia en consola.
 
-### ActivityLog de correos
+### ActivityLog de correos y sistema
 
 | Action | Cuándo |
 |--------|--------|
+| `CREATED` | Emergencia o reporte creado |
+| `ASSIGNED` | Responsable asignado o reasignado |
+| `MUNICIPALITY_ASSIGNED` | Municipalidad asignada automáticamente por región/comuna |
+| `EVIDENCE_ADDED` | Evidencia fotográfica adjuntada |
 | `EMAIL_SENT` | Correo enviado exitosamente |
 | `EMAIL_FAILED` | Fallo al enviar correo |
-| `MUNICIPALITY_ASSIGNED` | Municipalidad asignada automáticamente por región/comuna |
 
 ### Configuración en Railway
 
@@ -493,14 +541,34 @@ EMAIL_ENABLED=true
 
 Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca automáticamente una municipalidad activa con esa región/comuna y asigna el reporte a ella. Si no existe coincidencia, usa la municipalidad configurada en `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` como fallback.
 
-## Roadmap (post-MVP)
+## Roadmap
 
-- [x] Upload de imágenes a MinIO/S3 (proveedor configurable)
+### Completado
+
+- [x] CRUD completo de emergencias con código único (EMG-YYYY-XXXX) y reintentos ante colisión
+- [x] Dashboard con KPIs operacionales: tasa de resolución, tiempo promedio de cierre, distribución por tipo y prioridad
+- [x] Mapa interactivo interno con marcadores por prioridad (Leaflet + OpenStreetMap)
+- [x] **Mapa público ciudadano** (`/mapa-publico`) — emergencias activas sin login, sin datos sensibles
+- [x] Subida de evidencias fotográficas (local o MinIO/S3, proveedor configurable)
+- [x] **Limpieza automática de archivos** al eliminar una emergencia (local y S3)
 - [x] Geolocalización precisa: Google Maps Places Autocomplete (forward) + GPS + Nominatim reverse + mini-mapa con pin arrastrable
+- [x] Selects región/comuna en cascada con dataset oficial de Chile
+- [x] Asignación automática de municipalidad por región/comuna en reportes ciudadanos
 - [x] Notificaciones por correo con Resend (nuevo reporte al ADMIN + asignación al responsable)
-- [ ] Gestión de usuarios (CRUD desde UI)
-- [ ] Reportes estadísticos exportables
-- [ ] Integración WhatsApp Business API
-- [ ] WebSockets para actualizaciones en tiempo real
-- [ ] Panel multi-municipio
+- [x] **Preferencias de notificación por usuario** (`emailOnAssigned`, `emailOnNewReport`)
+- [x] Gestión de usuarios CRUD desde UI (crear, editar, activar/desactivar, cambiar contraseña)
+- [x] Panel multi-municipio para SUPER_ADMIN (municipalidades, usuarios, scope global)
+- [x] Exportación CSV con filtros activos (compatible Excel en español con BOM)
+- [x] Reporte imprimible/PDF por emergencia con historial completo y bloque de firma
+- [x] Flujo de cierre de emergencias (closedAt, closingNotes, notas obligatorias)
+- [x] Filtros avanzados con rango de fechas
+- [x] Rate limiting en login (5 intentos / 15 min por IP)
+- [x] Consulta pública de estado por código único (`/consulta`)
+
+### Próximas iteraciones
+
+- [ ] Integración WhatsApp Business API (notificaciones al reportante)
+- [ ] WebSockets para actualizaciones en tiempo real en el dashboard
 - [ ] App móvil React Native
+- [ ] Redis para rate limiting distribuido (multi-instancia)
+- [ ] Webhooks configurables por municipalidad

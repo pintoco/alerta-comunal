@@ -4,6 +4,7 @@ import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
+import { deleteUpload } from '@/lib/storage'
 
 export async function GET(
   _request: Request,
@@ -120,10 +121,10 @@ export async function PUT(
       try {
         const assignedUser = await prisma.user.findUnique({
           where: { id: data.assignedToId },
-          select: { name: true, email: true, active: true },
+          select: { name: true, email: true, active: true, emailOnAssigned: true },
         })
 
-        if (assignedUser?.active && assignedUser.email) {
+        if (assignedUser?.active && assignedUser.email && assignedUser.emailOnAssigned) {
           const emailResult = await sendEmergencyAssignmentEmail(assignedUser.email, {
             id: emergency.id,
             code: emergency.code,
@@ -175,6 +176,20 @@ export async function DELETE(
   const access = await requireEmergencyAccess(session, id)
   if (access instanceof NextResponse) return access
 
+  const evidences = await prisma.evidence.findMany({
+    where: { emergencyId: id },
+    select: { filename: true, url: true },
+  })
+
   await prisma.emergency.delete({ where: { id } })
+
+  for (const ev of evidences) {
+    try {
+      await deleteUpload(ev.filename, ev.url)
+    } catch (err) {
+      console.error(`[emergencias] No se pudo eliminar archivo ${ev.filename}:`, err)
+    }
+  }
+
   return NextResponse.json({ success: true })
 }

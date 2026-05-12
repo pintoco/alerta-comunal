@@ -9,6 +9,8 @@ export const userCreateSchema = z.object({
   role: z.enum(VALID_ROLES),
   municipalityId: z.string().cuid('ID de municipalidad inválido').optional().nullable(),
   active: z.boolean().default(true),
+  emailOnAssigned: z.boolean().default(true),
+  emailOnNewReport: z.boolean().default(true),
 }).refine(
   (data) => {
     if (['ADMIN', 'OPERADOR', 'VISUALIZADOR'].includes(data.role)) {
@@ -25,6 +27,8 @@ export const userUpdateSchema = z.object({
   role: z.enum(VALID_ROLES).optional(),
   municipalityId: z.string().cuid().optional().nullable(),
   active: z.boolean().optional(),
+  emailOnAssigned: z.boolean().optional(),
+  emailOnNewReport: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.role && ['ADMIN', 'OPERADOR', 'VISUALIZADOR'].includes(data.role)) {
