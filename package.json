@@ -10,8 +10,9 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:setup": "prisma db push && npx prisma db seed",
+    "prisma:setup": "prisma migrate deploy && npx prisma db seed",
     "postinstall": "prisma generate"
   },
   "prisma": {
