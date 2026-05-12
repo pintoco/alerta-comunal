@@ -564,11 +564,11 @@ Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca
 - [x] Filtros avanzados con rango de fechas
 - [x] Rate limiting en login (5 intentos / 15 min por IP)
 - [x] Consulta pública de estado por código único (`/consulta`)
+- [x] Actualizaciones en tiempo real en el dashboard vía SSE (Server-Sent Events): snapshot inicial server-side, refresco cada 30s, keepalive para Railway, reconexión automática con backoff exponencial e indicador "En vivo"
 
 ### Próximas iteraciones
 
 - [ ] Integración WhatsApp Business API (notificaciones al reportante)
-- [ ] WebSockets para actualizaciones en tiempo real en el dashboard
 - [ ] App móvil React Native
 - [ ] Redis para rate limiting distribuido (multi-instancia)
 - [ ] Webhooks configurables por municipalidad
