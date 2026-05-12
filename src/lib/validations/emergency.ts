@@ -44,6 +44,8 @@ export const emergencySchema = z.object({
   status: z.enum(['NUEVA', 'EN_ATENCION', 'RESUELTA', 'CERRADA', 'DESCARTADA']).optional(),
   address: z.string().min(5, 'La dirección debe tener al menos 5 caracteres').max(300),
   sector: z.string().max(100).optional().nullable(),
+  region: z.string().max(100).optional().nullable().transform((v) => v || null),
+  commune: z.string().max(100).optional().nullable().transform((v) => v || null),
   latitude: latitudeSchema,
   longitude: longitudeSchema,
   reporterName: z.string().min(2).max(100).optional().nullable(),

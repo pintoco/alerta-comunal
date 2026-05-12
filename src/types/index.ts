@@ -58,6 +58,8 @@ export interface Emergency {
   status: EmergencyStatus
   address: string
   sector?: string | null
+  region?: string | null
+  commune?: string | null
   latitude?: number | null
   longitude?: number | null
   reporterName?: string | null

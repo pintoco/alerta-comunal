@@ -18,6 +18,7 @@ import type { User, Emergency } from '@/types'
 import Button from '@/components/ui/Button'
 import Alert from '@/components/ui/Alert'
 import LocationPicker, { type Coords } from '@/components/emergencies/LocationPicker'
+import { CHILE_REGIONS_COMMUNES } from '@/data/chile-regions-communes'
 
 interface EmergencyFormProps {
   users: Pick<User, 'id' | 'name'>[]
@@ -51,6 +52,8 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
       status: initial?.status || 'NUEVA',
       address: initial?.address || '',
       sector: initial?.sector || '',
+      region: initial?.region || '',
+      commune: initial?.commune || '',
       latitude: initial?.latitude || null,
       longitude: initial?.longitude || null,
       reporterName: initial?.reporterName || '',
@@ -63,6 +66,12 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
       observations: initial?.observations || '',
     },
   })
+
+  const selectedRegion = watch('region')
+  const availableCommunes =
+    CHILE_REGIONS_COMMUNES.find((r) => r.region === selectedRegion)?.comunas ?? []
+
+  const { onChange: regionOnChange, ...regionRest } = register('region')
 
   const handleCoordsChange = (c: Coords | null) => {
     setCoords(c)
@@ -192,11 +201,46 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
           </div>
 
           <div>
-            <label className="form-label">Sector</label>
+            <label className="form-label">Región</label>
+            <select
+              {...regionRest}
+              onChange={(e) => {
+                regionOnChange(e)
+                setValue('commune', '', { shouldValidate: false })
+              }}
+              className="form-input"
+            >
+              <option value="">— Selecciona una región —</option>
+              {CHILE_REGIONS_COMMUNES.map((r) => (
+                <option key={r.region} value={r.region}>{r.region}</option>
+              ))}
+            </select>
+            {errors.region && <p className="form-error">{errors.region.message}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">Comuna</label>
+            <select
+              {...register('commune')}
+              className="form-input disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!selectedRegion}
+            >
+              <option value="">
+                {selectedRegion ? '— Selecciona una comuna —' : '— Primero selecciona una región —'}
+              </option>
+              {availableCommunes.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            {errors.commune && <p className="form-error">{errors.commune.message}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">Sector / Barrio</label>
             <input
               {...register('sector')}
               className="form-input"
-              placeholder="Ej: Centro, Norte, Sur..."
+              placeholder="Ej: Centro, Villa Los Pinos, Sector Norte..."
             />
           </div>
 

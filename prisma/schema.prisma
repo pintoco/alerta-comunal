@@ -96,6 +96,8 @@ model Emergency {
   status         EmergencyStatus @default(NUEVA)
   address        String
   sector         String?
+  region         String?
+  commune        String?
   latitude       Float?
   longitude      Float?
   reporterName   String?
