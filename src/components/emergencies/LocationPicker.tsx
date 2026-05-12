@@ -38,47 +38,59 @@ function parseResults(data: unknown[]): Suggestion[] {
   }))
 }
 
+async function nominatim(params: URLSearchParams): Promise<Suggestion[]> {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+    { headers: { 'User-Agent': 'AlertaComunal/1.0' } },
+  )
+  return parseResults(await res.json())
+}
+
 async function searchAddress(
   street: string,
   commune?: string,
   region?: string,
 ): Promise<Suggestion[]> {
-  const headers = { 'User-Agent': 'AlertaComunal/1.0' }
+  const base: Record<string, string> = {
+    format: 'json',
+    limit: '5',
+    'accept-language': 'es',
+    countrycodes: 'cl',
+  }
+  if (commune) base.city = commune
+  if (region) base.state = region
 
-  // Búsqueda estructurada cuando hay contexto geográfico — mucho más precisa
-  if (commune || region) {
-    const params = new URLSearchParams({
-      street,
-      format: 'json',
-      limit: '5',
-      'accept-language': 'es',
-      countrycodes: 'cl',
-    })
-    if (commune) params.set('city', commune)
-    if (region) params.set('state', region)
+  // Intenta separar "Nombre Calle 1234" → nombre + número para búsqueda exacta
+  const numMatch = street.trim().match(/^(.+?)\s+(\d+[a-zA-Z]?)$/)
+  const streetName = numMatch ? numMatch[1].trim() : street.trim()
+  const houseNumber = numMatch?.[2]
 
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?${params.toString()}`,
-      { headers },
-    )
-    const data = await res.json()
-    if ((data as unknown[]).length > 0) return parseResults(data)
-
-    // Sin resultados estructurados → fallback a texto libre con contexto
-    const fallback = [street, commune, region, 'Chile'].filter(Boolean).join(', ')
-    const res2 = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallback)}&format=json&limit=5&accept-language=es&countrycodes=cl`,
-      { headers },
-    )
-    return parseResults(await res2.json())
+  // 1. Búsqueda con número separado (máxima precisión cuando el dato existe en OSM)
+  if (houseNumber && (commune || region)) {
+    const p = new URLSearchParams({ ...base, street: streetName, housenumber: houseNumber })
+    const r1 = await nominatim(p)
+    if (r1.length > 0) return r1
   }
 
-  // Sin contexto → búsqueda libre
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(street)}&format=json&limit=5&accept-language=es&countrycodes=cl`,
-    { headers },
-  )
-  return parseResults(await res.json())
+  // 2. Búsqueda estructurada calle completa
+  if (commune || region) {
+    const p = new URLSearchParams({ ...base, street: street.trim() })
+    const r2 = await nominatim(p)
+    if (r2.length > 0) return r2
+  }
+
+  // 3. Texto libre con contexto como fallback
+  const freeText = [street.trim(), commune, region, 'Chile'].filter(Boolean).join(', ')
+  const p = new URLSearchParams({ ...base, q: freeText })
+  delete p['street' as keyof typeof p]
+  const p3 = new URLSearchParams({
+    q: freeText,
+    format: 'json',
+    limit: '5',
+    'accept-language': 'es',
+    countrycodes: 'cl',
+  })
+  return nominatim(p3)
 }
 
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
