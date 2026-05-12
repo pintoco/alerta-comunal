@@ -455,6 +455,32 @@ MAX_UPLOAD_SIZE_MB=5
 
 Al eliminar una evidencia, el sistema detecta automáticamente si es local (URL empieza con `/`) o S3 (URL empieza con `http`) y borra el archivo del lugar correcto.
 
+## Configuración en Railway para Redis
+
+AlertaComunal usa Redis para rate limiting distribuido cuando hay múltiples réplicas. Sin Redis, el sistema cae automáticamente a rate limiting en memoria (suficiente para instancia única).
+
+### Paso 1: Agregar Redis en Railway
+
+1. En el proyecto Railway → **New** → **Database** → **Redis**
+2. Railway crea el servicio Redis automáticamente
+
+### Paso 2: Vincular Redis al servicio Next.js
+
+1. Ir al servicio de AlertaComunal → **Variables**
+2. Hacer clic en **Add Variable Reference**
+3. Seleccionar el servicio Redis → elegir `REDIS_URL`
+4. Railway inyecta la variable como referencia dinámica:
+   ```
+   REDIS_URL = ${{Redis.REDIS_URL}}
+   ```
+5. Railway redespliega automáticamente al guardar
+
+### Verificación
+
+En los logs del servicio Next.js: si la conexión es exitosa no aparece nada (silencioso). Si hay error de conexión se registra `[Redis] connection error: ...` y el sistema continúa con fallback en memoria — el login sigue funcionando.
+
+> Sin `REDIS_URL` configurado el sistema funciona igual con rate limiting en memoria. Redis solo es necesario al escalar a múltiples réplicas.
+
 ## Configuración en Railway para MinIO
 
 1. Ir al servicio de AlertaComunal → **Variables**
