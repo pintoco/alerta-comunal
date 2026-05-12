@@ -1,6 +1,7 @@
 import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import QuickLogin from '@/components/demo/QuickLogin'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,8 +67,11 @@ export default async function Home() {
           </Link>
         </div>
 
+        {/* Demo quick-login — SOLO PARA PRUEBAS */}
+        <QuickLogin />
+
         {/* Features */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full text-left">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full text-left mt-12">
           {[
             {
               icon: (
