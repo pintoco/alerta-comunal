@@ -244,6 +244,7 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `RESEND_API_KEY` | API key de Resend para envío de correos. Obligatoria solo si `EMAIL_ENABLED=true`. | `re_xxxx...` |
 | `EMAIL_FROM` | Remitente de los correos automáticos. El dominio debe estar verificado en Resend. | `tecnico@elementalpro.cl` |
 | `EMAIL_ENABLED` | Activa el envío de correos. Si es `false` o no está, no se envían correos. | `true` / `false` |
+| `REDIS_URL` | URL de conexión Redis para rate limiting distribuido (multi-instancia). Opcional — sin ella el rate limiting usa memoria in-process (suficiente para instancia única). | `redis://user:pass@host:6379` |
 
 ## Comandos disponibles
 
@@ -399,7 +400,7 @@ alerta-comunal/
 ## Notas técnicas
 
 - **Auth:** JWT en cookies httpOnly con `jose`. Sin NextAuth.
-- **Rate limiting:** Implementado en memoria (`Map`) en `src/lib/rate-limit.ts`. Máximo 5 intentos de login por IP en ventana de 15 minutos. Se reinicia al lograr acceso exitoso. En instancias múltiples (horizontal scaling) el estado no se comparte — solución suficiente para MVP; migrar a Redis en producción de alta escala.
+- **Rate limiting:** Implementado en `src/lib/rate-limit.ts` con dos backends intercambiables. Cuando `REDIS_URL` está configurado usa Redis (patrón atómico `INCR` + `PEXPIRE`) — distribuido y correcto con múltiples réplicas. Sin `REDIS_URL`, cae en modo in-memory (`Map`) — suficiente para instancia única. Máximo 5 intentos de login por IP en ventana de 15 minutos; se reinicia al lograr acceso exitoso. El cambio entre backends es transparente para el endpoint de login.
 - **Geolocalización:** Componente `LocationPicker` compartido entre `/reportar` y el formulario interno. Ofrece tres modos: (1) **autocompletado Google Maps Places** — al escribir en el input se muestran sugerencias restringidas a Chile (`componentRestrictions: { country: 'cl' }`), al seleccionar se obtienen coordenadas exactas de la API de Google; (2) botón **GPS** que llama a `navigator.geolocation` y hace reverse geocoding con Nominatim para obtener la dirección textual; (3) **mini-mapa Leaflet con pin arrastrable** — al mover el pin se actualiza la dirección automáticamente por reverse geocoding. El contexto de región/comuna se muestra como hint pero la restricción al país la aplica Google directamente.
 - **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import. El mini-mapa del `LocationPicker` usa el mismo patrón (`MiniMap.tsx` importado con `dynamic`).
 - **Prisma en cliente:** `utils.ts` no importa Prisma. La función `generateEmergencyCode()` vive en `generate-code.ts` (server-only) para evitar bundling issues.
@@ -565,6 +566,7 @@ Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca
 - [x] Rate limiting en login (5 intentos / 15 min por IP)
 - [x] Consulta pública de estado por código único (`/consulta`)
 - [x] Actualizaciones en tiempo real en el dashboard vía SSE (Server-Sent Events): snapshot inicial server-side, refresco cada 30s, keepalive para Railway, reconexión automática con backoff exponencial e indicador "En vivo"
+- [x] Redis para rate limiting distribuido (multi-instancia): patrón atómico `INCR` + `PEXPIRE`, fallback automático a memoria in-process si `REDIS_URL` no está configurado
 
 ### Próximas iteraciones
 

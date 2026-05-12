@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const headersList = await headers()
     const ip = getClientIp(headersList)
 
-    const rateLimit = checkRateLimit(ip, 5, 15 * 60 * 1000)
+    const rateLimit = await checkRateLimit(ip, 5, 15 * 60 * 1000)
     if (!rateLimit.allowed) {
       await writeAuditLog({
         action: 'RATE_LIMIT_HIT',
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     }
 
     // Login exitoso: limpiar el contador de intentos
-    resetRateLimit(ip)
+    await resetRateLimit(ip)
 
     const session = {
       id: user.id,

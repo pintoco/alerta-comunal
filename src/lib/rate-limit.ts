@@ -1,57 +1,115 @@
-/**
- * Rate limiter simple en memoria para MVP single-réplica (Railway).
- *
- * LIMITACIÓN CONOCIDA: El estado vive en el proceso Node.js. Si Railway escala
- * a múltiples réplicas, cada instancia tiene su propia ventana independiente.
- * Para producción SaaS con múltiples réplicas, reemplazar por Redis/Upstash:
- *   https://github.com/upstash/ratelimit
- *
- * El Map se limpia automáticamente cuando expira la ventana de cada IP,
- * por lo que no hay riesgo de leak de memoria sostenido.
- */
-
-interface RateLimitRecord {
-  count: number
-  resetAt: number
-}
-
-const store = new Map<string, RateLimitRecord>()
+import { getRedisClient } from './redis'
 
 export interface RateLimitResult {
   allowed: boolean
   retryAfterSeconds?: number
 }
 
-/**
- * @param key        Identificador único del actor (ej. IP)
- * @param maxAttempts Intentos permitidos en la ventana
- * @param windowMs   Tamaño de la ventana en milisegundos
- */
-export function checkRateLimit(
-  key: string,
-  maxAttempts = 5,
-  windowMs = 15 * 60 * 1000
-): RateLimitResult {
+// ─── In-memory fallback (single-instance / dev) ──────────────────────────────
+
+interface RateLimitRecord {
+  count: number
+  resetAt: number
+}
+
+const memoryStore = new Map<string, RateLimitRecord>()
+
+function checkMemory(key: string, maxAttempts: number, windowMs: number): RateLimitResult {
   const now = Date.now()
-  const record = store.get(key)
+  const record = memoryStore.get(key)
 
   if (!record || now > record.resetAt) {
-    store.set(key, { count: 1, resetAt: now + windowMs })
+    memoryStore.set(key, { count: 1, resetAt: now + windowMs })
     return { allowed: true }
   }
 
   if (record.count >= maxAttempts) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.ceil((record.resetAt - now) / 1000),
-    }
+    return { allowed: false, retryAfterSeconds: Math.ceil((record.resetAt - now) / 1000) }
   }
 
   record.count++
   return { allowed: true }
 }
 
-/** Limpia el contador de una clave (llamar tras login exitoso). */
-export function resetRateLimit(key: string): void {
-  store.delete(key)
+function resetMemory(key: string): void {
+  memoryStore.delete(key)
+}
+
+// ─── Redis backend (multi-instance) ──────────────────────────────────────────
+
+const REDIS_KEY_PREFIX = 'rl:'
+
+/**
+ * Atomic INCR + EXPIRE pattern:
+ *   1. INCR key          → new count (key created with value 1 if missing)
+ *   2. if count === 1    → PEXPIRE key windowMs  (set TTL only on first hit)
+ *   3. if count > max    → PTTL key to compute retryAfter
+ */
+async function checkRedis(
+  redisKey: string,
+  maxAttempts: number,
+  windowMs: number
+): Promise<RateLimitResult> {
+  const redis = getRedisClient()!
+  const count = await redis.incr(redisKey)
+
+  if (count === 1) {
+    await redis.pexpire(redisKey, windowMs)
+  }
+
+  if (count > maxAttempts) {
+    const pttl = await redis.pttl(redisKey)
+    const retryAfterSeconds = pttl > 0 ? Math.ceil(pttl / 1000) : Math.ceil(windowMs / 1000)
+    return { allowed: false, retryAfterSeconds }
+  }
+
+  return { allowed: true }
+}
+
+async function resetRedis(redisKey: string): Promise<void> {
+  await getRedisClient()!.del(redisKey)
+}
+
+// ─── Public API (unchanged interface) ────────────────────────────────────────
+
+/**
+ * @param key         Unique actor identifier (e.g. IP address)
+ * @param maxAttempts Max attempts allowed within the window
+ * @param windowMs    Window size in milliseconds
+ *
+ * Uses Redis when REDIS_URL is set (distributed, multi-instance safe).
+ * Falls back to in-process memory when Redis is unavailable (dev / single-instance).
+ */
+export async function checkRateLimit(
+  key: string,
+  maxAttempts = 5,
+  windowMs = 15 * 60 * 1000
+): Promise<RateLimitResult> {
+  const redis = getRedisClient()
+
+  if (redis) {
+    try {
+      return await checkRedis(`${REDIS_KEY_PREFIX}${key}`, maxAttempts, windowMs)
+    } catch (err) {
+      console.error('[RateLimit] Redis error, falling back to memory:', (err as Error).message)
+    }
+  }
+
+  return checkMemory(key, maxAttempts, windowMs)
+}
+
+/** Clears the counter for a key (call after successful login). */
+export async function resetRateLimit(key: string): Promise<void> {
+  const redis = getRedisClient()
+
+  if (redis) {
+    try {
+      await resetRedis(`${REDIS_KEY_PREFIX}${key}`)
+      return
+    } catch (err) {
+      console.error('[RateLimit] Redis error on reset, falling back to memory:', (err as Error).message)
+    }
+  }
+
+  resetMemory(key)
 }
