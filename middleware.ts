@@ -21,7 +21,7 @@ const publicPaths = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (publicPaths.some((path) => pathname.startsWith(path))) {
+  if (pathname === '/' || publicPaths.some((path) => pathname.startsWith(path))) {
     return NextResponse.next()
   }
 
