@@ -160,3 +160,18 @@ model ActivityLog {
   description String
   createdAt   DateTime  @default(now())
 }
+
+// Audit log global — sin FK para que no se elimine en cascada.
+// Registra eventos de seguridad y operaciones destructivas de forma permanente.
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String?
+  entityId    String?
+  entityLabel String?
+  userId      String?
+  userName    String?
+  ipAddress   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}

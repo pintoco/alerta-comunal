@@ -6,6 +6,7 @@ import { createToken } from '@/lib/auth'
 import { loginSchema } from '@/lib/validations/auth'
 import { isProduction } from '@/lib/config'
 import { checkRateLimit, resetRateLimit } from '@/lib/rate-limit'
+import { writeAuditLog } from '@/lib/audit'
 
 function getClientIp(headersList: Awaited<ReturnType<typeof headers>>): string {
   return (
@@ -22,6 +23,12 @@ export async function POST(request: Request) {
 
     const rateLimit = checkRateLimit(ip, 5, 15 * 60 * 1000)
     if (!rateLimit.allowed) {
+      await writeAuditLog({
+        action: 'RATE_LIMIT_HIT',
+        entityType: 'AUTH',
+        ipAddress: ip,
+        metadata: { retryAfterSeconds: rateLimit.retryAfterSeconds },
+      })
       return NextResponse.json(
         {
           error: 'Demasiados intentos. Intenta nuevamente más tarde.',
@@ -51,12 +58,26 @@ export async function POST(request: Request) {
     const user = await prisma.user.findUnique({ where: { email } })
 
     if (!user || !user.active) {
+      await writeAuditLog({
+        action: 'LOGIN_FAILED',
+        entityType: 'AUTH',
+        entityLabel: email,
+        ipAddress: ip,
+        metadata: { reason: !user ? 'user_not_found' : 'user_inactive' },
+      })
       return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 })
     }
 
     const passwordMatch = await bcrypt.compare(password, user.password)
 
     if (!passwordMatch) {
+      await writeAuditLog({
+        action: 'LOGIN_FAILED',
+        entityType: 'AUTH',
+        entityLabel: email,
+        ipAddress: ip,
+        metadata: { reason: 'invalid_password' },
+      })
       return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 })
     }
 

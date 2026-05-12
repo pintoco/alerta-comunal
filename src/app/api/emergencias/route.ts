@@ -6,6 +6,7 @@ import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { getMunicipalityFilter, requireMunicipalityAssigned } from '@/lib/tenant'
 import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
+import { writeAuditLog } from '@/lib/audit'
 
 export async function GET(request: Request) {
   const session = await requireAuth()
@@ -83,9 +84,28 @@ export async function POST(request: Request) {
     // Determinar municipalityId: siempre desde sesión, nunca desde el cliente
     let municipalityId: string | null = session.municipalityId ?? null
     if (!municipalityId && session.role === 'SUPER_ADMIN') {
-      // SUPER_ADMIN sin municipalidad propia: asignar municipalidad demo como fallback
       const demo = await prisma.municipality.findFirst({ where: { slug: 'demo' }, select: { id: true } })
       municipalityId = demo?.id ?? null
+    }
+
+    // Validate assignedToId belongs to the target municipality
+    if (data.assignedToId && municipalityId) {
+      const targetUser = await prisma.user.findUnique({
+        where: { id: data.assignedToId },
+        select: { municipalityId: true, active: true },
+      })
+      if (!targetUser?.active) {
+        return NextResponse.json(
+          { error: 'El usuario asignado no existe o está inactivo' },
+          { status: 400 }
+        )
+      }
+      if (targetUser.municipalityId && targetUser.municipalityId !== municipalityId) {
+        return NextResponse.json(
+          { error: 'El usuario asignado no pertenece a esta municipalidad' },
+          { status: 400 }
+        )
+      }
     }
 
     const MAX_ATTEMPTS = 3
@@ -170,6 +190,16 @@ export async function POST(request: Request) {
                 ? `Correo de asignación enviado a ${assignedUser.name}.`
                 : `No se pudo enviar correo de asignación a ${assignedUser.name}.`,
             },
+          })
+
+          await writeAuditLog({
+            action: emailResult.success ? 'EMAIL_SENT' : 'EMAIL_FAILED',
+            entityType: 'EMERGENCY',
+            entityId: emergency.id,
+            entityLabel: emergency.code,
+            userId: session.id,
+            userName: session.name,
+            metadata: { recipientName: assignedUser.name, recipientEmail: assignedUser.email },
           })
         }
       } catch (emailErr) {
