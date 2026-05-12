@@ -180,9 +180,14 @@ PUBLIC_DEFAULT_MUNICIPALITY_SLUG=demo
 STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=5
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="tu-api-key-de-google-maps"
+# Correo (opcional — si no se configura, las emergencias se crean igual)
+RESEND_API_KEY="re_xxxx"
+EMAIL_FROM=tecnico@elementalpro.cl
+EMAIL_ENABLED=false
 ```
 
 > Sin `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` el formulario funciona (GPS y mini-mapa siguen operativos) pero el autocompletado de dirección no aparece.
+> Sin `RESEND_API_KEY` o con `EMAIL_ENABLED=false` los correos no se envían, pero las emergencias se crean correctamente.
 
 ### 3. Inicializar base de datos
 
@@ -219,6 +224,9 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `STORAGE_PROVIDER` | Backend de almacenamiento de archivos | `local` |
 | `MAX_UPLOAD_SIZE_MB` | Tamaño máximo de upload en MB | `5` |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | API key de Google Maps (Places + Geocoding). Sin ella el autocompletado se desactiva. | Activar en Google Cloud Console: Maps JavaScript API + Places API |
+| `RESEND_API_KEY` | API key de Resend para envío de correos. Obligatoria solo si `EMAIL_ENABLED=true`. | `re_xxxx...` |
+| `EMAIL_FROM` | Remitente de los correos automáticos. El dominio debe estar verificado en Resend. | `tecnico@elementalpro.cl` |
+| `EMAIL_ENABLED` | Activa el envío de correos. Si es `false` o no está, no se envían correos. | `true` / `false` |
 
 ## Comandos disponibles
 
@@ -263,7 +271,12 @@ PUBLIC_DEFAULT_MUNICIPALITY_SLUG=demo
 STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=5
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<tu key de Google Cloud Console>
+RESEND_API_KEY=<tu API key de Resend>
+EMAIL_FROM=tecnico@elementalpro.cl
+EMAIL_ENABLED=true
 ```
+
+> `RESEND_API_KEY` y `EMAIL_ENABLED=true` son opcionales. Sin ellas las emergencias se crean correctamente pero no se envían correos.
 
 ### Paso 4b (opcional): Volumen para imágenes persistentes
 
@@ -430,11 +443,61 @@ MAX_UPLOAD_SIZE_MB=5
 
 > No agregar `NODE_ENV` como variable manual en Railway.
 
+## Notificaciones por correo con Resend
+
+AlertaComunal usa [Resend](https://resend.com) para notificaciones automáticas por correo.
+
+### Variables requeridas
+
+| Variable | Descripción |
+|----------|-------------|
+| `RESEND_API_KEY` | API key de Resend — obligatoria solo si `EMAIL_ENABLED=true` |
+| `EMAIL_FROM` | Remitente. Por defecto: `tecnico@elementalpro.cl` |
+| `EMAIL_ENABLED` | `true` activa el envío. Si es `false` o no existe, no se envían correos |
+
+> El dominio del remitente (`EMAIL_FROM`) debe estar verificado en Resend para que el correo llegue correctamente.
+
+### Correos que se envían
+
+1. **Nuevo reporte ciudadano** — Al crear un reporte desde `/reportar`, se envía al(los) `ADMIN` activo(s) de la municipalidad asignada. Incluye código, tipo, prioridad, datos del reportante, descripción y link al detalle interno.
+
+2. **Asignación de emergencia** — Al crear o editar una emergencia y asignar un responsable nuevo, se envía a ese usuario. Incluye código, tipo, prioridad, dirección y link directo.
+
+### Comportamiento ante fallos
+
+- Si el envío falla: la emergencia **igual se crea**. No hay rollback.
+- El error se registra en consola y en el `ActivityLog` de la emergencia (`action: EMAIL_FAILED`).
+- Si `EMAIL_ENABLED=false`: no se intenta enviar ningún correo.
+- Si no hay administradores activos en la municipalidad: se registra advertencia en consola.
+
+### ActivityLog de correos
+
+| Action | Cuándo |
+|--------|--------|
+| `EMAIL_SENT` | Correo enviado exitosamente |
+| `EMAIL_FAILED` | Fallo al enviar correo |
+| `MUNICIPALITY_ASSIGNED` | Municipalidad asignada automáticamente por región/comuna |
+
+### Configuración en Railway
+
+1. Ir al servicio → **Variables** y agregar:
+```
+RESEND_API_KEY=re_xxxx...
+EMAIL_FROM=tecnico@elementalpro.cl
+EMAIL_ENABLED=true
+```
+2. Verificar que el dominio del remitente está habilitado en Resend.
+3. Redeployar el servicio.
+
+### Asignación automática de municipalidad por región/comuna
+
+Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca automáticamente una municipalidad activa con esa región/comuna y asigna el reporte a ella. Si no existe coincidencia, usa la municipalidad configurada en `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` como fallback.
+
 ## Roadmap (post-MVP)
 
 - [x] Upload de imágenes a MinIO/S3 (proveedor configurable)
 - [x] Geolocalización precisa: Google Maps Places Autocomplete (forward) + GPS + Nominatim reverse + mini-mapa con pin arrastrable
-- [ ] Notificaciones por correo electrónico
+- [x] Notificaciones por correo con Resend (nuevo reporte al ADMIN + asignación al responsable)
 - [ ] Gestión de usuarios (CRUD desde UI)
 - [ ] Reportes estadísticos exportables
 - [ ] Integración WhatsApp Business API

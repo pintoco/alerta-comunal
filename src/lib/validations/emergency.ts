@@ -58,22 +58,27 @@ export const emergencySchema = z.object({
 
 export type EmergencyFormData = z.infer<typeof emergencySchema>
 
-export const publicReportSchema = z.object({
-  reporterName: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
-  reporterPhone: z
-    .string()
-    .min(7, 'Teléfono debe tener al menos 7 caracteres')
-    .max(20)
-    .regex(/^[+\d\s\-()]+$/, 'Formato de teléfono inválido'),
-  type: z.enum(EMERGENCY_TYPES),
-  description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
-  address: z.string().min(5, 'La dirección debe tener al menos 5 caracteres').max(300),
-  sector: z.string().max(100).optional(),
-  region: z.string().max(100).optional().nullable().transform((v) => v || null),
-  commune: z.string().max(100).optional().nullable().transform((v) => v || null),
-  latitude: latitudeSchema,
-  longitude: longitudeSchema,
-})
+export const publicReportSchema = z
+  .object({
+    reporterName: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
+    reporterPhone: z
+      .string()
+      .min(7, 'Teléfono debe tener al menos 7 caracteres')
+      .max(20)
+      .regex(/^[+\d\s\-()]+$/, 'Formato de teléfono inválido'),
+    type: z.enum(EMERGENCY_TYPES),
+    description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
+    address: z.string().min(5, 'La dirección debe tener al menos 5 caracteres').max(300),
+    sector: z.string().max(100).optional(),
+    region: z.string().max(100).optional().nullable().transform((v) => v || null),
+    commune: z.string().max(100).optional().nullable().transform((v) => v || null),
+    latitude: latitudeSchema,
+    longitude: longitudeSchema,
+  })
+  .refine((data) => !data.commune || !!data.region, {
+    message: 'Debe seleccionar una región antes de seleccionar una comuna.',
+    path: ['commune'],
+  })
 
 export type PublicReportFormData = z.infer<typeof publicReportSchema>
 

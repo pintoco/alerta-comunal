@@ -5,6 +5,7 @@ import { generateEmergencyCode } from '@/lib/generate-code'
 import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { getMunicipalityFilter, requireMunicipalityAssigned } from '@/lib/tenant'
+import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
 
 export async function GET(request: Request) {
   const session = await requireAuth()
@@ -89,12 +90,12 @@ export async function POST(request: Request) {
 
     const MAX_ATTEMPTS = 3
     let lastError: unknown
+    let emergency: Awaited<ReturnType<typeof prisma.emergency.create>> | null = null
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const code = await generateEmergencyCode()
-
       try {
-        const emergency = await prisma.emergency.create({
+        emergency = await prisma.emergency.create({
           data: {
             ...data,
             code,
@@ -106,17 +107,7 @@ export async function POST(request: Request) {
             assignedTo: { select: { id: true, name: true, email: true } },
           },
         })
-
-        await prisma.activityLog.create({
-          data: {
-            emergencyId: emergency.id,
-            userId: session.id,
-            action: 'CREATED',
-            description: `Emergencia registrada por ${session.name}`,
-          },
-        })
-
-        return NextResponse.json(emergency, { status: 201 })
+        break
       } catch (err) {
         if (
           err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -130,11 +121,63 @@ export async function POST(request: Request) {
       }
     }
 
-    console.error('[generate-code] No se pudo generar código único tras 3 intentos', lastError)
-    return NextResponse.json(
-      { error: 'No se pudo generar un código único. Inténtalo nuevamente.' },
-      { status: 500 }
-    )
+    if (!emergency) {
+      console.error('[generate-code] No se pudo generar código único tras 3 intentos', lastError)
+      return NextResponse.json(
+        { error: 'No se pudo generar un código único. Inténtalo nuevamente.' },
+        { status: 500 }
+      )
+    }
+
+    await prisma.activityLog.create({
+      data: {
+        emergencyId: emergency.id,
+        userId: session.id,
+        action: 'CREATED',
+        description: `Emergencia registrada por ${session.name}`,
+      },
+    })
+
+    // Enviar correo de asignación si se asignó responsable al crear
+    if (isEmailEnabled() && data.assignedToId) {
+      try {
+        const assignedUser = await prisma.user.findUnique({
+          where: { id: data.assignedToId },
+          select: { name: true, email: true, active: true },
+        })
+
+        if (assignedUser?.active && assignedUser.email) {
+          const emailResult = await sendEmergencyAssignmentEmail(assignedUser.email, {
+            id: emergency.id,
+            code: emergency.code,
+            type: emergency.type,
+            priority: emergency.priority,
+            status: emergency.status,
+            region: emergency.region,
+            commune: emergency.commune,
+            address: emergency.address,
+            sector: emergency.sector,
+            description: emergency.description,
+            assignedByName: session.name,
+          })
+
+          await prisma.activityLog.create({
+            data: {
+              emergencyId: emergency.id,
+              userId: session.id,
+              action: emailResult.success ? 'EMAIL_SENT' : 'EMAIL_FAILED',
+              description: emailResult.success
+                ? `Correo de asignación enviado a ${assignedUser.name}.`
+                : `No se pudo enviar correo de asignación a ${assignedUser.name}.`,
+            },
+          })
+        }
+      } catch (emailErr) {
+        console.error('[emergencias] Error al enviar correo de asignación:', emailErr)
+      }
+    }
+
+    return NextResponse.json(emergency, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Error al crear emergencia' }, { status: 500 })
   }

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
+import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
 
 export async function GET(
   _request: Request,
@@ -108,6 +109,49 @@ export async function PUT(
       await prisma.activityLog.create({
         data: { emergencyId: id, userId: session.id, ...log },
       })
+    }
+
+    // Enviar correo si el responsable cambió a uno nuevo (no a null)
+    if (
+      isEmailEnabled() &&
+      data.assignedToId &&
+      data.assignedToId !== previous.assignedToId
+    ) {
+      try {
+        const assignedUser = await prisma.user.findUnique({
+          where: { id: data.assignedToId },
+          select: { name: true, email: true, active: true },
+        })
+
+        if (assignedUser?.active && assignedUser.email) {
+          const emailResult = await sendEmergencyAssignmentEmail(assignedUser.email, {
+            id: emergency.id,
+            code: emergency.code,
+            type: emergency.type,
+            priority: emergency.priority,
+            status: emergency.status,
+            region: emergency.region,
+            commune: emergency.commune,
+            address: emergency.address,
+            sector: emergency.sector,
+            description: emergency.description,
+            assignedByName: session.name,
+          })
+
+          await prisma.activityLog.create({
+            data: {
+              emergencyId: id,
+              userId: session.id,
+              action: emailResult.success ? 'EMAIL_SENT' : 'EMAIL_FAILED',
+              description: emailResult.success
+                ? `Correo de asignación enviado a ${assignedUser.name}.`
+                : `No se pudo enviar correo de asignación a ${assignedUser.name}.`,
+            },
+          })
+        }
+      } catch (emailErr) {
+        console.error('[emergencias] Error al enviar correo de reasignación:', emailErr)
+      }
     }
 
     return NextResponse.json(emergency)

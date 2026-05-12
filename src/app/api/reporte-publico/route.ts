@@ -5,6 +5,10 @@ import { Prisma } from '@prisma/client'
 import { publicReportSchema } from '@/lib/validations/emergency'
 import { municipalityConfig } from '@/lib/config'
 import { validateFile, saveUpload } from '@/lib/storage'
+import {
+  sendMunicipalityNewReportEmail,
+  isEmailEnabled,
+} from '@/lib/email'
 
 // ─── GET /api/reporte-publico?code=EMG-XXXX-XXXX ─────────────────────────────
 // Consulta pública de estado por código. No expone datos internos sensibles.
@@ -30,7 +34,6 @@ export async function GET(request: Request) {
       createdAt: true,
       occurredAt: true,
       closedAt: true,
-      // closingNotes se expone como nota pública de cierre
       closingNotes: true,
     },
   })
@@ -51,7 +54,6 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData()
 
-    // Extraer y parsear campos de texto
     const rawLatitude = formData.get('latitude')
     const rawLongitude = formData.get('longitude')
 
@@ -71,7 +73,6 @@ export async function POST(request: Request) {
     }
 
     const result = publicReportSchema.safeParse(body)
-
     if (!result.success) {
       return NextResponse.json(
         { error: 'Datos inválidos', details: result.error.flatten() },
@@ -89,27 +90,57 @@ export async function POST(request: Request) {
     }
 
     const data = result.data
-    const code = await generateEmergencyCode()
 
-    // Obtener (o crear) municipalidad demo
+    // ── Resolver municipalidad por región/comuna o fallback a demo ────────────
     let municipalityId: string | null = null
-    try {
-      const municipality = await prisma.municipality.upsert({
-        where: { slug: municipalityConfig.defaultSlug },
-        create: {
-          name: 'Municipalidad Demo',
-          slug: municipalityConfig.defaultSlug,
-          active: true,
-        },
-        update: {},
-        select: { id: true },
+    let municipalityName: string | null = null
+    let assignedByCommune = false
+
+    if (data.region && data.commune) {
+      const matching = await prisma.municipality.findMany({
+        where: { region: data.region, commune: data.commune, active: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
       })
-      municipalityId = municipality.id
-    } catch {
-      // Si falla (ej. tabla no existe), continuar sin municipalidad
+
+      if (matching.length > 0) {
+        municipalityId = matching[0].id
+        municipalityName = matching[0].name
+        assignedByCommune = true
+
+        if (matching.length > 1) {
+          console.warn(
+            `[reporte-publico] Múltiples municipalidades activas para ${data.region} / ` +
+              `${data.commune}. Se usó "${matching[0].name}". IDs: ${matching.map((m) => m.id).join(', ')}`
+          )
+        }
+      }
     }
 
-    // Retry ante colisión de código (igual que en emergencias internas)
+    // Fallback a municipalidad demo
+    if (!municipalityId) {
+      if (data.region && data.commune) {
+        console.warn(
+          `[reporte-publico] Sin municipalidad activa para ${data.commune}, ${data.region}. ` +
+            'Usando municipalidad por defecto.'
+        )
+      }
+      try {
+        const demo = await prisma.municipality.upsert({
+          where: { slug: municipalityConfig.defaultSlug },
+          create: { name: 'Municipalidad Demo', slug: municipalityConfig.defaultSlug, active: true },
+          update: {},
+          select: { id: true, name: true },
+        })
+        municipalityId = demo.id
+        municipalityName = demo.name
+      } catch {
+        // Continuar sin municipalidad si la tabla aún no existe
+      }
+    }
+
+    // ── Crear emergencia con retry ante colisión de código ────────────────────
+    const code = await generateEmergencyCode()
     const MAX_ATTEMPTS = 3
     let emergency: Awaited<ReturnType<typeof prisma.emergency.create>> | null = null
     let lastError: unknown
@@ -156,6 +187,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al procesar el reporte' }, { status: 500 })
     }
 
+    // ActivityLog: creación
     await prisma.activityLog.create({
       data: {
         emergencyId: emergency.id,
@@ -163,6 +195,25 @@ export async function POST(request: Request) {
         description: `Reporte ciudadano recibido de ${data.reporterName} (${data.reporterPhone})`,
       },
     })
+
+    // ActivityLog: asignación de municipalidad por región/comuna
+    if (assignedByCommune && municipalityName) {
+      await prisma.activityLog.create({
+        data: {
+          emergencyId: emergency.id,
+          action: 'MUNICIPALITY_ASSIGNED',
+          description: `Asignado automáticamente a "${municipalityName}" por coincidencia de región/comuna.`,
+        },
+      })
+    } else if (data.region && data.commune && municipalityId) {
+      await prisma.activityLog.create({
+        data: {
+          emergencyId: emergency.id,
+          action: 'MUNICIPALITY_ASSIGNED',
+          description: `No se encontró municipalidad para la comuna seleccionada. Se usó municipalidad por defecto: "${municipalityName}".`,
+        },
+      })
+    }
 
     // Guardar foto si se adjuntó (fallo no bloquea la creación)
     if (photoFile && photoFile.size > 0) {
@@ -191,8 +242,59 @@ export async function POST(request: Request) {
           },
         })
       } catch (photoErr) {
-        // La emergencia ya fue creada y tiene código. Solo loguear el error de la foto.
         console.error('[reporte-publico] Error al guardar foto del ciudadano:', photoErr)
+      }
+    }
+
+    // ── Notificar por correo a los administradores de la municipalidad ────────
+    if (isEmailEnabled() && municipalityId) {
+      try {
+        const admins = await prisma.user.findMany({
+          where: { municipalityId, role: 'ADMIN', active: true },
+          select: { email: true, name: true },
+        })
+
+        if (admins.length > 0) {
+          const emailResult = await sendMunicipalityNewReportEmail(
+            admins.map((a) => a.email),
+            {
+              id: emergency.id,
+              code: emergency.code,
+              type: emergency.type,
+              priority: emergency.priority,
+              status: emergency.status,
+              region: emergency.region,
+              commune: emergency.commune,
+              address: emergency.address,
+              sector: emergency.sector,
+              reporterName: emergency.reporterName,
+              reporterPhone: emergency.reporterPhone,
+              description: emergency.description,
+              createdAt: emergency.createdAt,
+              municipalityName,
+            }
+          )
+
+          await prisma.activityLog.create({
+            data: {
+              emergencyId: emergency.id,
+              action: emailResult.success ? 'EMAIL_SENT' : 'EMAIL_FAILED',
+              description: emailResult.success
+                ? `Correo de nuevo reporte enviado a ${admins.length} administrador(es) municipal(es).`
+                : `No se pudo enviar correo de notificación al administrador municipal.`,
+            },
+          })
+
+          if (!emailResult.success) {
+            console.error('[reporte-publico] Fallo al enviar correo:', emailResult.error)
+          }
+        } else {
+          console.warn(
+            `[reporte-publico] Sin administradores activos para municipalidad ${municipalityId}. Correo no enviado.`
+          )
+        }
+      } catch (emailErr) {
+        console.error('[reporte-publico] Error inesperado al enviar correo:', emailErr)
       }
     }
 

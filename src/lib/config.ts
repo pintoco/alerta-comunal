@@ -32,3 +32,9 @@ export const municipalityConfig = {
 }
 
 export const appUrl = process.env.APP_URL || 'http://localhost:3000'
+
+export const emailConfig = {
+  enabled: process.env.EMAIL_ENABLED === 'true',
+  apiKey: process.env.RESEND_API_KEY || '',
+  from: process.env.EMAIL_FROM || 'tecnico@elementalpro.cl',
+}
