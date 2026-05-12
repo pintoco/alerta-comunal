@@ -37,7 +37,6 @@ export default function ReportarPage() {
   const selectedCommune = watch('commune')
   const availableCommunes =
     CHILE_REGIONS_COMMUNES.find((r) => r.region === selectedRegion)?.comunas ?? []
-  const locationContext = [selectedCommune, selectedRegion].filter(Boolean).join(', ') || undefined
   const { onChange: regionOnChange, ...regionRest } = register('region')
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,7 +253,8 @@ export default function ReportarPage() {
                 onCoordsChange={setCoords}
                 addressError={errors.address?.message}
                 placeholder="Av. Principal 1234"
-                contextHint={locationContext}
+                commune={selectedCommune || undefined}
+                region={selectedRegion || undefined}
               />
             </div>
             <div>

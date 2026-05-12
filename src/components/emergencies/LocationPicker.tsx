@@ -26,22 +26,59 @@ interface LocationPickerProps {
   onCoordsChange: (v: Coords | null) => void
   addressError?: string
   placeholder?: string
-  /** Contexto geográfico adicional para mejorar precisión del geocoding (ej: "Maipú, Región Metropolitana de Santiago") */
-  contextHint?: string
+  commune?: string
+  region?: string
 }
 
-async function searchAddress(query: string): Promise<Suggestion[]> {
-  const url =
-    `https://nominatim.openstreetmap.org/search` +
-    `?q=${encodeURIComponent(query)}` +
-    `&format=json&limit=5&accept-language=es&countrycodes=cl`
-  const res = await fetch(url, { headers: { 'User-Agent': 'AlertaComunal/1.0' } })
-  const data = await res.json()
+function parseResults(data: unknown[]): Suggestion[] {
   return (data as { lat: string; lon: string; display_name: string }[]).map((item) => ({
     lat: parseFloat(item.lat),
     lng: parseFloat(item.lon),
     display: item.display_name.split(',').slice(0, 4).join(','),
   }))
+}
+
+async function searchAddress(
+  street: string,
+  commune?: string,
+  region?: string,
+): Promise<Suggestion[]> {
+  const headers = { 'User-Agent': 'AlertaComunal/1.0' }
+
+  // Búsqueda estructurada cuando hay contexto geográfico — mucho más precisa
+  if (commune || region) {
+    const params = new URLSearchParams({
+      street,
+      format: 'json',
+      limit: '5',
+      'accept-language': 'es',
+      countrycodes: 'cl',
+    })
+    if (commune) params.set('city', commune)
+    if (region) params.set('state', region)
+
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+      { headers },
+    )
+    const data = await res.json()
+    if ((data as unknown[]).length > 0) return parseResults(data)
+
+    // Sin resultados estructurados → fallback a texto libre con contexto
+    const fallback = [street, commune, region, 'Chile'].filter(Boolean).join(', ')
+    const res2 = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallback)}&format=json&limit=5&accept-language=es&countrycodes=cl`,
+      { headers },
+    )
+    return parseResults(await res2.json())
+  }
+
+  // Sin contexto → búsqueda libre
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(street)}&format=json&limit=5&accept-language=es&countrycodes=cl`,
+    { headers },
+  )
+  return parseResults(await res.json())
 }
 
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
@@ -69,21 +106,23 @@ export default function LocationPicker({
   onCoordsChange,
   addressError,
   placeholder = 'Av. Principal 1234, Santiago',
-  contextHint,
+  commune,
+  region,
 }: LocationPickerProps) {
   const [geocoding, setGeocoding] = useState(false)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
 
+  const contextHint = [commune, region].filter(Boolean).join(', ') || undefined
+
   const handleSearch = async () => {
     if (!address.trim()) return
     setGeocoding(true)
     setMessage(null)
     setSuggestions([])
-    const query = contextHint ? `${address.trim()}, ${contextHint}, Chile` : address.trim()
     try {
-      const results = await searchAddress(query)
+      const results = await searchAddress(address.trim(), commune, region)
       if (results.length === 0) {
         setMessage({ text: 'No se encontró la dirección. Agrega la comuna o ciudad.', ok: false })
       } else if (results.length === 1) {

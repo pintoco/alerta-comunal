@@ -71,7 +71,6 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
   const selectedCommune = watch('commune')
   const availableCommunes =
     CHILE_REGIONS_COMMUNES.find((r) => r.region === selectedRegion)?.comunas ?? []
-  const locationContext = [selectedCommune, selectedRegion].filter(Boolean).join(', ') || undefined
 
   const { onChange: regionOnChange, ...regionRest } = register('region')
 
@@ -234,7 +233,8 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
               onCoordsChange={handleCoordsChange}
               addressError={errors.address?.message}
               placeholder="Av. Principal 1234"
-              contextHint={locationContext}
+              commune={selectedCommune || undefined}
+              region={selectedRegion || undefined}
             />
           </div>
 
