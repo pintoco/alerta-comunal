@@ -14,8 +14,10 @@ const publicPaths = [
   '/login',
   '/reportar',
   '/consulta',
+  '/mapa-publico',
   '/api/auth/login',
   '/api/reporte-publico',
+  '/api/mapa-publico',
 ]
 
 export async function middleware(request: NextRequest) {
