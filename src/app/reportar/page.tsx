@@ -7,6 +7,7 @@ import { publicReportSchema, PublicReportFormData } from '@/lib/validations/emer
 import { EMERGENCY_TYPE_LABELS, EMERGENCY_TYPES } from '@/lib/utils'
 import Button from '@/components/ui/Button'
 import LocationPicker, { type Coords } from '@/components/emergencies/LocationPicker'
+import { CHILE_REGIONS_COMMUNES } from '@/data/chile-regions-communes'
 
 export default function ReportarPage() {
   const [submitted, setSubmitted] = useState(false)
@@ -29,8 +30,13 @@ export default function ReportarPage() {
     formState: { errors, isSubmitting },
   } = useForm<PublicReportFormData>({
     resolver: zodResolver(publicReportSchema),
-    defaultValues: { type: 'OTRO' },
+    defaultValues: { type: 'OTRO', region: '', commune: '' },
   })
+
+  const selectedRegion = watch('region')
+  const availableCommunes =
+    CHILE_REGIONS_COMMUNES.find((r) => r.region === selectedRegion)?.comunas ?? []
+  const { onChange: regionOnChange, ...regionRest } = register('region')
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhotoError('')
@@ -64,6 +70,8 @@ export default function ReportarPage() {
       formData.append('description', data.description)
       formData.append('address', data.address)
       if (data.sector) formData.append('sector', data.sector)
+      if (data.region) formData.append('region', data.region)
+      if (data.commune) formData.append('commune', data.commune)
       if (coords) {
         formData.append('latitude', String(coords.lat))
         formData.append('longitude', String(coords.lng))
@@ -212,6 +220,39 @@ export default function ReportarPage() {
                 addressError={errors.address?.message}
                 placeholder="Av. Principal 1234, Santiago"
               />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="form-label">Región</label>
+                <select
+                  {...regionRest}
+                  onChange={(e) => {
+                    regionOnChange(e)
+                    setValue('commune', '', { shouldValidate: false })
+                  }}
+                  className="form-input"
+                >
+                  <option value="">— Selecciona una región —</option>
+                  {CHILE_REGIONS_COMMUNES.map((r) => (
+                    <option key={r.region} value={r.region}>{r.region}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Comuna</label>
+                <select
+                  {...register('commune')}
+                  className="form-input disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!selectedRegion}
+                >
+                  <option value="">
+                    {selectedRegion ? '— Selecciona una comuna —' : '— Primero selecciona una región —'}
+                  </option>
+                  {availableCommunes.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="form-label">Sector o barrio</label>

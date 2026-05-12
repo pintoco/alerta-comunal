@@ -69,6 +69,8 @@ export const publicReportSchema = z.object({
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
   address: z.string().min(5, 'La dirección debe tener al menos 5 caracteres').max(300),
   sector: z.string().max(100).optional(),
+  region: z.string().max(100).optional().nullable().transform((v) => v || null),
+  commune: z.string().max(100).optional().nullable().transform((v) => v || null),
   latitude: latitudeSchema,
   longitude: longitudeSchema,
 })

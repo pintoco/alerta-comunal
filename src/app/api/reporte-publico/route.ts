@@ -62,6 +62,8 @@ export async function POST(request: Request) {
       description: formData.get('description') as string,
       address: formData.get('address') as string,
       sector: (formData.get('sector') as string) || undefined,
+      region: (formData.get('region') as string) || undefined,
+      commune: (formData.get('commune') as string) || undefined,
       latitude:
         rawLatitude && rawLatitude !== '' ? parseFloat(rawLatitude as string) : null,
       longitude:
@@ -125,6 +127,8 @@ export async function POST(request: Request) {
             status: 'NUEVA',
             address: data.address,
             sector: data.sector || null,
+            region: data.region || null,
+            commune: data.commune || null,
             latitude: data.latitude || null,
             longitude: data.longitude || null,
             reporterName: data.reporterName,
