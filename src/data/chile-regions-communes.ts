@@ -145,3 +145,20 @@ export const CHILE_REGIONS_COMMUNES: ChileRegion[] = [
     ],
   },
 ]
+
+export function getRegionNames(): string[] {
+  return CHILE_REGIONS_COMMUNES.map((r) => r.region)
+}
+
+export function getCommunesByRegion(regionName: string): string[] {
+  return CHILE_REGIONS_COMMUNES.find((r) => r.region === regionName)?.comunas ?? []
+}
+
+export function isValidRegion(regionName: string): boolean {
+  return CHILE_REGIONS_COMMUNES.some((r) => r.region === regionName)
+}
+
+export function isValidCommuneForRegion(regionName: string, communeName: string): boolean {
+  const region = CHILE_REGIONS_COMMUNES.find((r) => r.region === regionName)
+  return region ? region.comunas.includes(communeName) : false
+}
