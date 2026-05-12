@@ -14,6 +14,7 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 | Base de datos | PostgreSQL + Prisma ORM |
 | Autenticación | JWT con jose (cookies httpOnly) |
 | Mapas | Leaflet + React-Leaflet + OpenStreetMap |
+| Geocodificación | Google Maps Places API (autocomplete) + Nominatim (reverse) |
 | Validaciones | Zod + React Hook Form |
 | Deploy | Railway |
 
@@ -132,7 +133,10 @@ El reporte de cada emergencia (`/emergencias/[id]/reporte`) está diseñado para
 ### Formulario ciudadano (`/reportar`)
 
 - Acceso público sin login
-- Geocodificación de dirección (Nominatim/OpenStreetMap)
+- Selección de región y comuna para contextualizar la búsqueda
+- Autocompletado de dirección en tiempo real con Google Maps Places (restricción a Chile)
+- Botón GPS para obtener coordenadas del dispositivo + reverse geocoding con Nominatim
+- Mini-mapa Leaflet con pin arrastrable para ajuste fino de ubicación
 - Foto opcional (se sube a MinIO/S3 o almacenamiento local)
 - Genera código único de seguimiento (EMG-YYYY-XXXX)
 - Asigna automáticamente la municipalidad demo
@@ -175,7 +179,10 @@ APP_URL="http://localhost:3000"
 PUBLIC_DEFAULT_MUNICIPALITY_SLUG=demo
 STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=5
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="tu-api-key-de-google-maps"
 ```
+
+> Sin `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` el formulario funciona (GPS y mini-mapa siguen operativos) pero el autocompletado de dirección no aparece.
 
 ### 3. Inicializar base de datos
 
@@ -211,6 +218,7 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` | Slug de municipalidad para reportes ciudadanos | `demo` |
 | `STORAGE_PROVIDER` | Backend de almacenamiento de archivos | `local` |
 | `MAX_UPLOAD_SIZE_MB` | Tamaño máximo de upload en MB | `5` |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | API key de Google Maps (Places + Geocoding). Sin ella el autocompletado se desactiva. | Activar en Google Cloud Console: Maps JavaScript API + Places API |
 
 ## Comandos disponibles
 
@@ -254,6 +262,7 @@ APP_URL=https://tu-app.up.railway.app
 PUBLIC_DEFAULT_MUNICIPALITY_SLUG=demo
 STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=5
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<tu key de Google Cloud Console>
 ```
 
 ### Paso 4b (opcional): Volumen para imágenes persistentes
@@ -344,7 +353,7 @@ alerta-comunal/
 
 - **Auth:** JWT en cookies httpOnly con `jose`. Sin NextAuth.
 - **Rate limiting:** Implementado en memoria (`Map`) en `src/lib/rate-limit.ts`. Máximo 5 intentos de login por IP en ventana de 15 minutos. Se reinicia al lograr acceso exitoso. En instancias múltiples (horizontal scaling) el estado no se comparte — solución suficiente para MVP; migrar a Redis en producción de alta escala.
-- **Geolocalización:** Componente `LocationPicker` compartido entre `/reportar` y el formulario interno. Ofrece tres modos: (1) botón **GPS** que llama a `navigator.geolocation` y hace reverse geocoding con Nominatim para obtener la dirección; (2) búsqueda por texto con `countrycodes=cl` para resultados chilenos, con dropdown cuando hay varias coincidencias; (3) mini-mapa Leaflet con pin arrastrable y click-to-place — al mover el pin se actualiza la dirección automáticamente por reverse geocoding.
+- **Geolocalización:** Componente `LocationPicker` compartido entre `/reportar` y el formulario interno. Ofrece tres modos: (1) **autocompletado Google Maps Places** — al escribir en el input se muestran sugerencias restringidas a Chile (`componentRestrictions: { country: 'cl' }`), al seleccionar se obtienen coordenadas exactas de la API de Google; (2) botón **GPS** que llama a `navigator.geolocation` y hace reverse geocoding con Nominatim para obtener la dirección textual; (3) **mini-mapa Leaflet con pin arrastrable** — al mover el pin se actualiza la dirección automáticamente por reverse geocoding. El contexto de región/comuna se muestra como hint pero la restricción al país la aplica Google directamente.
 - **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import. El mini-mapa del `LocationPicker` usa el mismo patrón (`MiniMap.tsx` importado con `dynamic`).
 - **Prisma en cliente:** `utils.ts` no importa Prisma. La función `generateEmergencyCode()` vive en `generate-code.ts` (server-only) para evitar bundling issues.
 - **Race condition en códigos:** La función `generateEmergencyCode()` usa `COUNT` (no atómico). Los endpoints POST de emergencias implementan un loop de reintentos (máx. 3) capturando el error Prisma P2002 en el campo `code`.
@@ -424,7 +433,7 @@ MAX_UPLOAD_SIZE_MB=5
 ## Roadmap (post-MVP)
 
 - [x] Upload de imágenes a MinIO/S3 (proveedor configurable)
-- [x] Geolocalización mejorada: GPS, múltiples sugerencias, mini-mapa con pin arrastrable
+- [x] Geolocalización precisa: Google Maps Places Autocomplete (forward) + GPS + Nominatim reverse + mini-mapa con pin arrastrable
 - [ ] Notificaciones por correo electrónico
 - [ ] Gestión de usuarios (CRUD desde UI)
 - [ ] Reportes estadísticos exportables

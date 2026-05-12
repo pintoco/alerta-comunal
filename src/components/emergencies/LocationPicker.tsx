@@ -76,6 +76,7 @@ export default function LocationPicker({
   // Cargar Google Maps Places y crear Autocomplete
   useEffect(() => {
     if (!inputRef.current || autocompleteRef.current) return
+    if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) return
     const input = inputRef.current
 
     configureMaps()
