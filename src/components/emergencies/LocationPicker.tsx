@@ -26,6 +26,8 @@ interface LocationPickerProps {
   onCoordsChange: (v: Coords | null) => void
   addressError?: string
   placeholder?: string
+  /** Contexto geográfico adicional para mejorar precisión del geocoding (ej: "Maipú, Región Metropolitana de Santiago") */
+  contextHint?: string
 }
 
 async function searchAddress(query: string): Promise<Suggestion[]> {
@@ -67,6 +69,7 @@ export default function LocationPicker({
   onCoordsChange,
   addressError,
   placeholder = 'Av. Principal 1234, Santiago',
+  contextHint,
 }: LocationPickerProps) {
   const [geocoding, setGeocoding] = useState(false)
   const [gpsLoading, setGpsLoading] = useState(false)
@@ -78,8 +81,9 @@ export default function LocationPicker({
     setGeocoding(true)
     setMessage(null)
     setSuggestions([])
+    const query = contextHint ? `${address.trim()}, ${contextHint}, Chile` : address.trim()
     try {
-      const results = await searchAddress(address)
+      const results = await searchAddress(query)
       if (results.length === 0) {
         setMessage({ text: 'No se encontró la dirección. Agrega la comuna o ciudad.', ok: false })
       } else if (results.length === 1) {
@@ -216,6 +220,12 @@ export default function LocationPicker({
             GPS
           </button>
         </div>
+
+        {contextHint && (
+          <p className="text-xs text-blue-600 mt-1">
+            La búsqueda usará el contexto: <strong>{contextHint}</strong>
+          </p>
+        )}
 
         {addressError && <p className="form-error">{addressError}</p>}
 

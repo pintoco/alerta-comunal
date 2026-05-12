@@ -34,8 +34,10 @@ export default function ReportarPage() {
   })
 
   const selectedRegion = watch('region')
+  const selectedCommune = watch('commune')
   const availableCommunes =
     CHILE_REGIONS_COMMUNES.find((r) => r.region === selectedRegion)?.comunas ?? []
+  const locationContext = [selectedCommune, selectedRegion].filter(Boolean).join(', ') || undefined
   const { onChange: regionOnChange, ...regionRest } = register('region')
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -207,20 +209,6 @@ export default function ReportarPage() {
           {/* Ubicación */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
             <h2 className="font-semibold text-gray-900">Ubicación</h2>
-            <div>
-              <label className="form-label">Dirección exacta *</label>
-              <LocationPicker
-                address={currentAddress || watch('address') || ''}
-                onAddressChange={(v) => {
-                  setCurrentAddress(v)
-                  setValue('address', v, { shouldValidate: true })
-                }}
-                coords={coords}
-                onCoordsChange={setCoords}
-                addressError={errors.address?.message}
-                placeholder="Av. Principal 1234, Santiago"
-              />
-            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="form-label">Región</label>
@@ -253,6 +241,21 @@ export default function ReportarPage() {
                   ))}
                 </select>
               </div>
+            </div>
+            <div>
+              <label className="form-label">Dirección exacta *</label>
+              <LocationPicker
+                address={currentAddress || watch('address') || ''}
+                onAddressChange={(v) => {
+                  setCurrentAddress(v)
+                  setValue('address', v, { shouldValidate: true })
+                }}
+                coords={coords}
+                onCoordsChange={setCoords}
+                addressError={errors.address?.message}
+                placeholder="Av. Principal 1234"
+                contextHint={locationContext}
+              />
             </div>
             <div>
               <label className="form-label">Sector o barrio</label>

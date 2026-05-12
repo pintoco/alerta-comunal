@@ -68,8 +68,10 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
   })
 
   const selectedRegion = watch('region')
+  const selectedCommune = watch('commune')
   const availableCommunes =
     CHILE_REGIONS_COMMUNES.find((r) => r.region === selectedRegion)?.comunas ?? []
+  const locationContext = [selectedCommune, selectedRegion].filter(Boolean).join(', ') || undefined
 
   const { onChange: regionOnChange, ...regionRest } = register('region')
 
@@ -188,18 +190,6 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
       <div className="card p-6">
         <h3 className="text-base font-semibold text-gray-900 mb-4">Ubicación</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <label className="form-label">Dirección *</label>
-            <LocationPicker
-              address={watch('address') || ''}
-              onAddressChange={(v) => setValue('address', v, { shouldValidate: true })}
-              coords={coords}
-              onCoordsChange={handleCoordsChange}
-              addressError={errors.address?.message}
-              placeholder="Av. Principal 1234, Santiago"
-            />
-          </div>
-
           <div>
             <label className="form-label">Región</label>
             <select
@@ -233,6 +223,19 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
               ))}
             </select>
             {errors.commune && <p className="form-error">{errors.commune.message}</p>}
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="form-label">Dirección *</label>
+            <LocationPicker
+              address={watch('address') || ''}
+              onAddressChange={(v) => setValue('address', v, { shouldValidate: true })}
+              coords={coords}
+              onCoordsChange={handleCoordsChange}
+              addressError={errors.address?.message}
+              placeholder="Av. Principal 1234"
+              contextHint={locationContext}
+            />
           </div>
 
           <div>
