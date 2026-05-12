@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
+import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
 
 const MiniMap = dynamic(() => import('./MiniMap'), {
   ssr: false,
@@ -11,12 +12,6 @@ const MiniMap = dynamic(() => import('./MiniMap'), {
 export interface Coords {
   lat: number
   lng: number
-}
-
-interface Suggestion {
-  lat: number
-  lng: number
-  display: string
 }
 
 interface LocationPickerProps {
@@ -30,74 +25,23 @@ interface LocationPickerProps {
   region?: string
 }
 
-function parseResults(data: unknown[]): Suggestion[] {
-  return (data as { lat: string; lon: string; display_name: string }[]).map((item) => ({
-    lat: parseFloat(item.lat),
-    lng: parseFloat(item.lon),
-    display: item.display_name.split(',').slice(0, 4).join(','),
-  }))
-}
-
-async function nominatim(params: URLSearchParams): Promise<Suggestion[]> {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?${params.toString()}`,
-    { headers: { 'User-Agent': 'AlertaComunal/1.0' } },
-  )
-  return parseResults(await res.json())
-}
-
-async function searchAddress(
-  street: string,
-  commune?: string,
-  region?: string,
-): Promise<Suggestion[]> {
-  const base: Record<string, string> = {
-    format: 'json',
-    limit: '5',
-    'accept-language': 'es',
-    countrycodes: 'cl',
-  }
-  if (commune) base.city = commune
-  if (region) base.state = region
-
-  // Intenta separar "Nombre Calle 1234" → nombre + número para búsqueda exacta
-  const numMatch = street.trim().match(/^(.+?)\s+(\d+[a-zA-Z]?)$/)
-  const streetName = numMatch ? numMatch[1].trim() : street.trim()
-  const houseNumber = numMatch?.[2]
-
-  // 1. Búsqueda con número separado (máxima precisión cuando el dato existe en OSM)
-  if (houseNumber && (commune || region)) {
-    const p = new URLSearchParams({ ...base, street: streetName, housenumber: houseNumber })
-    const r1 = await nominatim(p)
-    if (r1.length > 0) return r1
-  }
-
-  // 2. Búsqueda estructurada calle completa
-  if (commune || region) {
-    const p = new URLSearchParams({ ...base, street: street.trim() })
-    const r2 = await nominatim(p)
-    if (r2.length > 0) return r2
-  }
-
-  // 3. Texto libre con contexto como fallback
-  const freeText = [street.trim(), commune, region, 'Chile'].filter(Boolean).join(', ')
-  const p = new URLSearchParams({ ...base, q: freeText })
-  delete p['street' as keyof typeof p]
-  const p3 = new URLSearchParams({
-    q: freeText,
-    format: 'json',
-    limit: '5',
-    'accept-language': 'es',
-    countrycodes: 'cl',
+let mapsConfigured = false
+function configureMaps() {
+  if (mapsConfigured) return
+  setOptions({
+    key: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
+    v: 'weekly',
+    language: 'es',
+    region: 'CL',
   })
-  return nominatim(p3)
+  mapsConfigured = true
 }
 
 async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
-  const url =
-    `https://nominatim.openstreetmap.org/reverse` +
-    `?lat=${lat}&lon=${lng}&format=json&accept-language=es`
-  const res = await fetch(url, { headers: { 'User-Agent': 'AlertaComunal/1.0' } })
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
+    { headers: { 'User-Agent': 'AlertaComunal/1.0' } },
+  )
   const data = await res.json()
   if (data.error) return null
   const a = data.address as Record<string, string>
@@ -117,39 +61,50 @@ export default function LocationPicker({
   coords,
   onCoordsChange,
   addressError,
-  placeholder = 'Av. Principal 1234, Santiago',
+  placeholder = 'Av. Principal 1234',
   commune,
   region,
 }: LocationPickerProps) {
-  const [geocoding, setGeocoding] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
   const [gpsLoading, setGpsLoading] = useState(false)
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
+  const [ready, setReady] = useState(false)
 
   const contextHint = [commune, region].filter(Boolean).join(', ') || undefined
 
-  const handleSearch = async () => {
-    if (!address.trim()) return
-    setGeocoding(true)
-    setMessage(null)
-    setSuggestions([])
-    try {
-      const results = await searchAddress(address.trim(), commune, region)
-      if (results.length === 0) {
-        setMessage({ text: 'No se encontró la dirección. Agrega la comuna o ciudad.', ok: false })
-      } else if (results.length === 1) {
-        onCoordsChange({ lat: results[0].lat, lng: results[0].lng })
-        setMessage({ text: `Ubicado: ${results[0].display}`, ok: true })
-      } else {
-        setSuggestions(results)
-        setMessage({ text: 'Varias coincidencias — selecciona la correcta:', ok: true })
-      }
-    } catch {
-      setMessage({ text: 'Error al buscar la dirección.', ok: false })
-    } finally {
-      setGeocoding(false)
-    }
-  }
+  // Cargar Google Maps Places y crear Autocomplete
+  useEffect(() => {
+    if (!inputRef.current || autocompleteRef.current) return
+    const input = inputRef.current
+
+    configureMaps()
+    importLibrary('places')
+      .then((places) => {
+        const { Autocomplete } = places as google.maps.PlacesLibrary
+        const ac = new Autocomplete(input, {
+          componentRestrictions: { country: 'cl' },
+          fields: ['geometry', 'formatted_address'],
+          types: ['address'],
+        })
+        ac.addListener('place_changed', () => {
+          const place = ac.getPlace()
+          if (!place.geometry?.location) {
+            setMessage({ text: 'Selecciona una opción de la lista desplegable.', ok: false })
+            return
+          }
+          const lat = place.geometry.location.lat()
+          const lng = place.geometry.location.lng()
+          onCoordsChange({ lat, lng })
+          onAddressChange(place.formatted_address ?? input.value ?? '')
+          setMessage({ text: 'Dirección geocodificada correctamente.', ok: true })
+        })
+        autocompleteRef.current = ac
+        setReady(true)
+      })
+      .catch(() => { /* degrada sin autocompletado */ })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleGPS = () => {
     if (!navigator.geolocation) {
@@ -158,7 +113,6 @@ export default function LocationPicker({
     }
     setGpsLoading(true)
     setMessage(null)
-    setSuggestions([])
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords
@@ -167,9 +121,9 @@ export default function LocationPicker({
           const addr = await reverseGeocode(latitude, longitude)
           if (addr) {
             onAddressChange(addr)
-            setMessage({ text: `Ubicación GPS: ${addr}`, ok: true })
+            setMessage({ text: `GPS: ${addr}`, ok: true })
           } else {
-            setMessage({ text: `GPS obtenido: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`, ok: true })
+            setMessage({ text: `GPS: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`, ok: true })
           }
         } catch {
           setMessage({ text: `Coordenadas: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`, ok: true })
@@ -185,15 +139,8 @@ export default function LocationPicker({
         }
         setMessage({ text: msgs[err.code] || 'Error al obtener ubicación.', ok: false })
       },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
     )
-  }
-
-  const handleSuggestionSelect = (s: Suggestion) => {
-    onCoordsChange({ lat: s.lat, lng: s.lng })
-    onAddressChange(s.display.split(',').slice(0, 2).join(',').trim())
-    setSuggestions([])
-    setMessage({ text: `Ubicado: ${s.display}`, ok: true })
   }
 
   const handleMapMove = async (lat: number, lng: number) => {
@@ -202,59 +149,29 @@ export default function LocationPicker({
       const addr = await reverseGeocode(lat, lng)
       if (addr) {
         onAddressChange(addr)
-        setMessage({ text: `Dirección actualizada: ${addr}`, ok: true })
+        setMessage({ text: `Dirección: ${addr}`, ok: true })
       }
     } catch {
-      // silent — coords already updated
+      // silent
     }
   }
 
-  const busy = geocoding || gpsLoading
-
   return (
     <div className="space-y-3">
-      {/* Input row */}
       <div>
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             value={address}
             onChange={(e) => onAddressChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleSearch()
-              }
-            }}
             className="form-input flex-1"
-            placeholder={placeholder}
+            placeholder={ready ? `${placeholder} — escribe para buscar` : placeholder}
+            autoComplete="off"
           />
-
-          {/* Search button */}
-          <button
-            type="button"
-            onClick={handleSearch}
-            disabled={busy || !address.trim()}
-            title="Buscar coordenadas por texto"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-          >
-            {geocoding ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            )}
-            Buscar
-          </button>
-
-          {/* GPS button */}
           <button
             type="button"
             onClick={handleGPS}
-            disabled={busy}
+            disabled={gpsLoading}
             title="Usar mi ubicación actual (GPS)"
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
           >
@@ -274,7 +191,7 @@ export default function LocationPicker({
 
         {contextHint && (
           <p className="text-xs text-blue-600 mt-1">
-            La búsqueda usará el contexto: <strong>{contextHint}</strong>
+            Contexto activo: <strong>{contextHint}</strong>
           </p>
         )}
 
@@ -285,25 +202,8 @@ export default function LocationPicker({
             {message.ok ? '✓ ' : '⚠ '}{message.text}
           </p>
         )}
-
-        {/* Suggestions dropdown */}
-        {suggestions.length > 0 && (
-          <div className="mt-1 border border-gray-200 rounded-md shadow-sm bg-white divide-y divide-gray-100 overflow-hidden">
-            {suggestions.map((s, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => handleSuggestionSelect(s)}
-                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-blue-50 transition-colors"
-              >
-                {s.display}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* Mini-map preview */}
       {coords && (
         <div>
           <p className="text-xs text-gray-400 mb-1">
