@@ -33,8 +33,22 @@ export const municipalityConfig = {
 
 export const appUrl = process.env.APP_URL || 'http://localhost:3000'
 
+const EMAIL_FROM_DEFAULT = 'tecnico@elementalpro.cl'
+
+if (
+  process.env.EMAIL_ENABLED === 'true' &&
+  !process.env.EMAIL_FROM &&
+  isProduction
+) {
+  console.warn(
+    '[AlertaComunal] EMAIL_ENABLED=true pero EMAIL_FROM no está configurado. ' +
+      `Usando remitente de respaldo "${EMAIL_FROM_DEFAULT}". ` +
+      'En producción, configura EMAIL_FROM con un dominio verificado en Resend.'
+  )
+}
+
 export const emailConfig = {
   enabled: process.env.EMAIL_ENABLED === 'true',
   apiKey: process.env.RESEND_API_KEY || '',
-  from: process.env.EMAIL_FROM || 'tecnico@elementalpro.cl',
+  from: process.env.EMAIL_FROM || EMAIL_FROM_DEFAULT,
 }

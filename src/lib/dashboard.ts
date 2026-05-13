@@ -34,6 +34,7 @@ export async function getDashboardData(session: Session): Promise<DashboardData>
   const scope = getEmergencyScope(session)
   const now = new Date()
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
   if (scope === false) {
     return {
@@ -76,8 +77,10 @@ export async function getDashboardData(session: Session): Promise<DashboardData>
       _count: { _all: true },
     }),
     prisma.emergency.findMany({
-      where: { ...scope, closedAt: { not: null } },
+      where: { ...scope, closedAt: { gte: ninetyDaysAgo } },
       select: { createdAt: true, closedAt: true },
+      take: 500,
+      orderBy: { closedAt: 'desc' },
     }),
     prisma.emergency.findMany({
       where: scope,

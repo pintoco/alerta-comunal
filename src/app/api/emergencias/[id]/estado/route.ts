@@ -32,6 +32,13 @@ export async function PATCH(
 
     const { status, closingNotes } = result.data
 
+    if (status === 'CERRADA' && (!closingNotes || closingNotes.trim().length < 10)) {
+      return NextResponse.json(
+        { error: 'Las notas de cierre son obligatorias al cerrar una emergencia (mínimo 10 caracteres).' },
+        { status: 400 }
+      )
+    }
+
     const previous = await prisma.emergency.findUnique({ where: { id } })
     if (!previous) {
       return NextResponse.json({ error: 'Emergencia no encontrada' }, { status: 404 })

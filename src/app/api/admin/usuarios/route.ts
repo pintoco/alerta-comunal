@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSuperAdmin } from '@/lib/permissions'
 import { userCreateSchema } from '@/lib/validations/user'
+import { writeAuditLog } from '@/lib/audit'
 import bcrypt from 'bcryptjs'
 
 export async function GET(request: Request) {
@@ -69,6 +70,16 @@ export async function POST(request: Request) {
       select: {
         id: true, name: true, email: true, role: true, active: true, municipalityId: true, createdAt: true,
       },
+    })
+
+    await writeAuditLog({
+      action: 'USER_CREATED',
+      entityType: 'USER',
+      entityId: user.id,
+      entityLabel: user.email,
+      userId: session.id,
+      userName: session.name,
+      metadata: { name, email, role, municipalityId: municipalityId ?? null, active },
     })
 
     return NextResponse.json(user, { status: 201 })

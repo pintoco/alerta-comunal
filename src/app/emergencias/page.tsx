@@ -12,6 +12,8 @@ import Loading from '@/components/ui/Loading'
 import type { Emergency, Session } from '@/types'
 import { getEmergencyScope } from '@/lib/tenant'
 
+const PAGE_SIZE = 50
+
 interface PageProps {
   searchParams: Promise<{
     search?: string
@@ -21,6 +23,7 @@ interface PageProps {
     sector?: string
     desde?: string
     hasta?: string
+    page?: string
   }>
 }
 
@@ -71,17 +74,74 @@ async function EmergencyList({
     if (Object.keys(createdAt).length > 0) where.createdAt = createdAt
   }
 
-  const emergencies = await prisma.emergency.findMany({
-    where,
-    include: {
-      assignedTo: {
-        select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const rawPage = parseInt(searchParams.page || '1', 10)
+  const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage
+  const skip = (page - 1) * PAGE_SIZE
 
-  return <EmergencyTable emergencies={emergencies as unknown as Emergency[]} canEdit={canEdit} />
+  const [emergencies, total] = await Promise.all([
+    prisma.emergency.findMany({
+      where,
+      include: {
+        assignedTo: {
+          select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: PAGE_SIZE,
+    }),
+    prisma.emergency.count({ where }),
+  ])
+
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  // Build URL helper preserving current filters
+  const buildPageUrl = (p: number) => {
+    const params = new URLSearchParams()
+    if (searchParams.search) params.set('search', searchParams.search)
+    if (searchParams.status) params.set('status', searchParams.status)
+    if (searchParams.priority) params.set('priority', searchParams.priority)
+    if (searchParams.type) params.set('type', searchParams.type)
+    if (searchParams.sector) params.set('sector', searchParams.sector)
+    if (searchParams.desde) params.set('desde', searchParams.desde)
+    if (searchParams.hasta) params.set('hasta', searchParams.hasta)
+    params.set('page', String(p))
+    return `/emergencias?${params.toString()}`
+  }
+
+  return (
+    <div className="space-y-4">
+      <EmergencyTable emergencies={emergencies as unknown as Emergency[]} canEdit={canEdit} />
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-gray-500">
+          <span>
+            Mostrando {skip + 1}–{Math.min(skip + PAGE_SIZE, total)} de {total} emergencias
+          </span>
+          <div className="flex gap-2">
+            {page > 1 && (
+              <Link
+                href={buildPageUrl(page - 1)}
+                className="px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
+              >
+                ← Anterior
+              </Link>
+            )}
+            <span className="px-3 py-1.5 text-gray-600">
+              Página {page} de {totalPages}
+            </span>
+            {page < totalPages && (
+              <Link
+                href={buildPageUrl(page + 1)}
+                className="px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
+              >
+                Siguiente →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default async function EmergenciasPage({ searchParams }: PageProps) {

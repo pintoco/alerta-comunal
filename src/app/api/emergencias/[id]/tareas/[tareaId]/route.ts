@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
+
+const taskPatchSchema = z.object({
+  status: z.enum(['PENDIENTE', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA'], {
+    errorMap: () => ({ message: 'Estado inválido. Valores permitidos: PENDIENTE, EN_PROCESO, COMPLETADA, CANCELADA' }),
+  }),
+})
 
 export async function PATCH(
   request: Request,
@@ -23,7 +30,14 @@ export async function PATCH(
 
   try {
     const body = await request.json()
-    const { status } = body
+    const parsed = taskPatchSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.errors[0]?.message ?? 'Estado inválido' },
+        { status: 400 }
+      )
+    }
+    const { status } = parsed.data
 
     const completedAt = status === 'COMPLETADA' ? new Date() : null
 

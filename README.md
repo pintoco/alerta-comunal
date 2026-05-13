@@ -105,7 +105,7 @@ El dashboard muestra métricas operacionales en tiempo real:
 - **Distribución por tipo:** barras horizontales con todos los tipos de emergencia
 - **Distribución por prioridad:** barras con colores por nivel de criticidad (crítica, alta, media, baja)
 
-Todos los indicadores respetan el scope municipal: OPERADOR y VISUALIZADOR solo ven datos de su municipalidad; ADMIN tiene vista global.
+Todos los indicadores respetan el scope municipal: OPERADOR y VISUALIZADOR solo ven datos de su municipalidad; ADMIN ve solo los datos de su municipalidad. SUPER_ADMIN ve todas las municipalidades.
 
 ### Exportación CSV
 
@@ -114,7 +114,8 @@ Desde el listado de emergencias, el botón **Exportar CSV** descarga un archivo 
 - Ruta: `GET /api/emergencias/export`
 - Respeta scope municipal (nunca expone datos de otra municipalidad)
 - Respeta todos los filtros: estado, prioridad, tipo, sector, búsqueda de texto, rango de fechas
-- Columnas: código, título, tipo, prioridad, estado, dirección, sector, origen, reportante, teléfono, responsable, fecha creación, fecha ocurrencia, fecha cierre
+- Columnas: código, título, tipo, prioridad, estado, dirección, sector, origen, responsable, fecha creación, fecha ocurrencia, fecha cierre
+- **Columnas de PII (reportante, teléfono):** visibles para SUPER_ADMIN, ADMIN y OPERADOR; **ocultas para VISUALIZADOR**
 - Codificación UTF-8 con BOM (compatible con Excel en español)
 
 ### Filtros por rango de fecha
@@ -132,7 +133,7 @@ El reporte de cada emergencia (`/emergencias/[id]/reporte`) está diseñado para
 - Galería de evidencias fotográficas
 - **Historial de actividad completo** con fecha, descripción y usuario responsable de cada cambio
 - **Bloque de firma** con espacio para firma del responsable municipal y timbre de unidad
-- Compatible con impresión desde navegador y exportación a PDF
+- Compatible con impresión desde navegador (Ctrl+P / Cmd+P) y guardar como PDF usando el diálogo de impresión del sistema operativo (no hay generación de PDF server-side)
 
 ### Formulario ciudadano (`/reportar`)
 
@@ -167,9 +168,11 @@ El reporte de cada emergencia (`/emergencias/[id]/reporte`) está diseñado para
 ### Separación por municipalidad
 
 - OPERADOR y VISUALIZADOR solo ven emergencias, usuarios y estadísticas de su municipalidad
-- ADMIN tiene vista global sin restricciones
+- ADMIN solo ve los datos de su municipalidad (no es vista global)
+- Solo SUPER_ADMIN tiene scope global sobre todas las municipalidades
 - El sidebar muestra nombre, comuna y región de la municipalidad activa
 - Los usuarios sin municipalidad asignada reciben 403 en todas las operaciones
+- Los usuarios desactivados quedan bloqueados inmediatamente (validación contra DB en cada request, no requiere expiración del JWT)
 
 ## Instalación local
 
@@ -201,6 +204,8 @@ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="tu-api-key-de-google-maps"
 RESEND_API_KEY="re_xxxx"
 EMAIL_FROM=tecnico@elementalpro.cl
 EMAIL_ENABLED=false
+# Demo (opcional — solo para presentaciones, nunca en producción real)
+NEXT_PUBLIC_DEMO_MODE=false
 ```
 
 > Sin `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` el formulario funciona (GPS y mini-mapa siguen operativos) pero el autocompletado de dirección no aparece.
@@ -242,9 +247,10 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `MAX_UPLOAD_SIZE_MB` | Tamaño máximo de upload en MB | `5` |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | API key de Google Maps (Places + Geocoding). Sin ella el autocompletado se desactiva. | Activar en Google Cloud Console: Maps JavaScript API + Places API |
 | `RESEND_API_KEY` | API key de Resend para envío de correos. Obligatoria solo si `EMAIL_ENABLED=true`. | `re_xxxx...` |
-| `EMAIL_FROM` | Remitente de los correos automáticos. El dominio debe estar verificado en Resend. | `tecnico@elementalpro.cl` |
+| `EMAIL_FROM` | Remitente de los correos automáticos. El dominio debe estar verificado en Resend. Default: `tecnico@elementalpro.cl`. | `notificaciones@midominio.cl` |
 | `EMAIL_ENABLED` | Activa el envío de correos. Si es `false` o no está, no se envían correos. | `true` / `false` |
 | `REDIS_URL` | URL de conexión Redis para rate limiting distribuido (multi-instancia). Opcional — sin ella el rate limiting usa memoria in-process (suficiente para instancia única). | `redis://user:pass@host:6379` |
+| `NEXT_PUBLIC_DEMO_MODE` | `true` muestra el panel QuickLogin en la página principal con credenciales precargadas. **No usar en producción real.** Default: `false`. | `true` / `false` |
 
 ## Comandos disponibles
 
@@ -256,7 +262,7 @@ npm run lint              # Verificar código
 npm run prisma:generate   # Generar cliente Prisma
 npm run prisma:push       # Sincronizar schema con la DB (sin migraciones)
 npm run prisma:seed       # Cargar datos de ejemplo
-npm run prisma:setup      # prisma db push + seed (todo en uno)
+npm run prisma:setup      # prisma migrate deploy + seed (todo en uno)
 ```
 
 ## Deploy en Railway
@@ -593,10 +599,19 @@ Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca
 - [x] Consulta pública de estado por código único (`/consulta`)
 - [x] Actualizaciones en tiempo real en el dashboard vía SSE (Server-Sent Events): snapshot inicial server-side, refresco cada 30s, keepalive para Railway, reconexión automática con backoff exponencial e indicador "En vivo"
 - [x] Redis para rate limiting distribuido (multi-instancia): patrón atómico `INCR` + `PEXPIRE`, fallback automático a memoria in-process si `REDIS_URL` no está configurado
+- [x] **Rate limiting en rutas públicas** (`/api/reporte-publico`, `/api/mapa-publico`): 5 reportes/IP/15min, 30 consultas/IP/10min, 60 solicitudes mapa/IP/5min
+- [x] **Modo demo condicional** (`NEXT_PUBLIC_DEMO_MODE`): QuickLogin y credenciales solo visibles si la variable está activa; ocultos en producción real
+- [x] **Validación de usuario activo en cada request**: usuarios desactivados quedan bloqueados inmediatamente sin esperar expiración del JWT; municipalidades inactivas bloquean a sus usuarios municipales
+- [x] **Paginación en listado de emergencias**: 50 registros por página, controles anterior/siguiente, compatible con todos los filtros
+- [x] **CSV sin PII para VISUALIZADOR**: columnas de reportante y teléfono ocultas; visibles para ADMIN, OPERADOR y SUPER_ADMIN
+- [x] **Closing notes obligatorio al cerrar** (mínimo 10 caracteres)
+- [x] **Validación Zod en status de tareas**: valores inválidos retornan 400 con mensaje claro
+- [x] **AuditLog en operaciones admin críticas**: crear/editar/activar/desactivar municipalidades y usuarios, cambio de contraseña (sin exponer la contraseña en metadata)
+- [x] **Índices de base de datos**: Emergency (municipalityId, status, createdAt y combinados), ActivityLog (emergencyId), AuditLog (action, createdAt, entityType, userId)
+- [x] **Dashboard optimizado**: cálculo de tiempo promedio de cierre limitado a últimos 90 días (máx. 500 registros) en lugar de toda la historia
 
 ### Próximas iteraciones
 
 - [ ] Integración WhatsApp Business API (notificaciones al reportante)
 - [ ] App móvil React Native
-- [ ] Redis para rate limiting distribuido (multi-instancia)
 - [ ] Webhooks configurables por municipalidad

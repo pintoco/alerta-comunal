@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSuperAdmin } from '@/lib/permissions'
 import { municipalitySchema } from '@/lib/validations/municipality'
+import { writeAuditLog } from '@/lib/audit'
 
 export async function GET() {
   const session = await requireSuperAdmin()
@@ -41,6 +42,16 @@ export async function POST(request: Request) {
 
     const municipality = await prisma.municipality.create({
       data: { name, slug, region: region || null, commune: commune || null, active },
+    })
+
+    await writeAuditLog({
+      action: 'MUNICIPALITY_CREATED',
+      entityType: 'MUNICIPALITY',
+      entityId: municipality.id,
+      entityLabel: municipality.name,
+      userId: session.id,
+      userName: session.name,
+      metadata: { slug, region: region || null, commune: commune || null, active },
     })
 
     return NextResponse.json(municipality, { status: 201 })

@@ -120,6 +120,12 @@ model Emergency {
   evidences    Evidence[]
   tasks        Task[]
   activityLogs ActivityLog[]
+
+  @@index([municipalityId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([municipalityId, status])
+  @@index([municipalityId, createdAt])
 }
 
 model Evidence {
@@ -159,6 +165,8 @@ model ActivityLog {
   action      String
   description String
   createdAt   DateTime  @default(now())
+
+  @@index([emergencyId])
 }
 
 // Audit log global — sin FK para que no se elimine en cascada.
@@ -174,4 +182,9 @@ model AuditLog {
   ipAddress   String?
   metadata    Json?
   createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType])
+  @@index([userId])
 }

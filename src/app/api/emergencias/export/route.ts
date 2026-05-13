@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/permissions'
 import { getMunicipalityFilter, requireMunicipalityAssigned } from '@/lib/tenant'
+import type { Session } from '@/types'
 
 export async function GET(request: Request) {
   const session = await requireAuth()
@@ -9,6 +10,8 @@ export async function GET(request: Request) {
 
   const noMunicipality = requireMunicipalityAssigned(session)
   if (noMunicipality) return noMunicipality
+
+  const includePII = (session as Session).role !== 'VISUALIZADOR'
 
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || ''
@@ -49,7 +52,9 @@ export async function GET(request: Request) {
 
   const header = [
     'Código', 'Título', 'Tipo', 'Prioridad', 'Estado', 'Dirección', 'Sector',
-    'Origen', 'Reportante', 'Teléfono reportante', 'Responsable',
+    'Origen',
+    ...(includePII ? ['Reportante', 'Teléfono reportante'] : []),
+    'Responsable',
     'Fecha creación', 'Fecha ocurrencia', 'Fecha cierre',
   ]
 
@@ -62,8 +67,7 @@ export async function GET(request: Request) {
     e.address,
     e.sector ?? '',
     e.origin,
-    e.reporterName ?? '',
-    e.reporterPhone ?? '',
+    ...(includePII ? [e.reporterName ?? '', e.reporterPhone ?? ''] : []),
     e.assignedTo?.name ?? '',
     e.createdAt.toISOString(),
     e.occurredAt?.toISOString() ?? '',

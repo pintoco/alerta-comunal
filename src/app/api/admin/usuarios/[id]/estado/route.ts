@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSuperAdmin } from '@/lib/permissions'
+import { writeAuditLog } from '@/lib/audit'
 import { z } from 'zod'
 
 const schema = z.object({ active: z.boolean() })
@@ -38,7 +39,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const user = await prisma.user.update({
     where: { id },
     data: { active: result.data.active },
-    select: { id: true, name: true, active: true },
+    select: { id: true, name: true, email: true, active: true },
+  })
+
+  await writeAuditLog({
+    action: result.data.active ? 'USER_ACTIVATED' : 'USER_DEACTIVATED',
+    entityType: 'USER',
+    entityId: user.id,
+    entityLabel: user.email,
+    userId: session.id,
+    userName: session.name,
   })
 
   return NextResponse.json(user)

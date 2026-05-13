@@ -47,15 +47,32 @@ export async function GET(request: Request) {
     if (Object.keys(createdAt).length > 0) where.createdAt = createdAt
   }
 
-  const emergencies = await prisma.emergency.findMany({
-    where,
-    include: {
-      assignedTo: { select: { id: true, name: true, email: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const rawPage = parseInt(searchParams.get('page') || '1', 10)
+  const rawLimit = parseInt(searchParams.get('limit') || '50', 10)
+  const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage
+  const limit = isNaN(rawLimit) || rawLimit < 1 ? 50 : Math.min(rawLimit, 100)
+  const skip = (page - 1) * limit
 
-  return NextResponse.json(emergencies)
+  const [emergencies, total] = await Promise.all([
+    prisma.emergency.findMany({
+      where,
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.emergency.count({ where }),
+  ])
+
+  return NextResponse.json({
+    data: emergencies,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  })
 }
 
 export async function POST(request: Request) {

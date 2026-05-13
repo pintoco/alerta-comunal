@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireSuperAdmin } from '@/lib/permissions'
 import { userUpdateSchema } from '@/lib/validations/user'
+import { writeAuditLog } from '@/lib/audit'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSuperAdmin()
@@ -62,6 +63,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         id: true, name: true, email: true, role: true, active: true,
         municipalityId: true, emailOnAssigned: true, emailOnNewReport: true, updatedAt: true,
       },
+    })
+
+    await writeAuditLog({
+      action: 'USER_UPDATED',
+      entityType: 'USER',
+      entityId: user.id,
+      entityLabel: user.email,
+      userId: session.id,
+      userName: session.name,
+      metadata: result.data,
     })
 
     return NextResponse.json(user)

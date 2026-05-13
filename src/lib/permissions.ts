@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from './auth'
+import { prisma } from './prisma'
 import type { Session, UserRole } from '@/types'
 
 export async function getCurrentUser(): Promise<Session | null> {
@@ -11,6 +12,24 @@ export async function requireAuth(): Promise<Session | NextResponse> {
   if (!session) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    select: {
+      active: true,
+      municipalityId: true,
+      municipality: { select: { active: true } },
+    },
+  })
+
+  if (!user || !user.active) {
+    return NextResponse.json({ error: 'Usuario desactivado o no encontrado' }, { status: 401 })
+  }
+
+  if (session.role !== 'SUPER_ADMIN' && user.municipalityId && user.municipality && !user.municipality.active) {
+    return NextResponse.json({ error: 'La municipalidad asociada está inactiva' }, { status: 403 })
+  }
+
   return session
 }
 
@@ -35,6 +54,16 @@ export async function requireSuperAdmin(): Promise<Session | NextResponse> {
       { status: 403 }
     )
   }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.id },
+    select: { active: true },
+  })
+
+  if (!user || !user.active) {
+    return NextResponse.json({ error: 'Usuario desactivado o no encontrado' }, { status: 401 })
+  }
+
   return session
 }
 
