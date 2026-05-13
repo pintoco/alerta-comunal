@@ -181,6 +181,28 @@ export async function POST(request: Request) {
     const validCoAssigneeIds = coAssigneeIds.filter(
       (id) => id !== data.assignedToId && id.length > 0,
     )
+
+    // Validate co-assignees: active + same municipality
+    if (validCoAssigneeIds.length > 0 && municipalityId) {
+      const coUserRecords = await prisma.user.findMany({
+        where: { id: { in: validCoAssigneeIds } },
+        select: { id: true, municipalityId: true, active: true },
+      })
+      const foundIds = new Set(coUserRecords.map((u) => u.id))
+      const missing = validCoAssigneeIds.find((id) => !foundIds.has(id))
+      if (missing) {
+        return NextResponse.json({ error: 'Uno o más co-responsables no existen' }, { status: 400 })
+      }
+      for (const coUser of coUserRecords) {
+        if (!coUser.active) {
+          return NextResponse.json({ error: 'Uno o más co-responsables están inactivos' }, { status: 400 })
+        }
+        if (coUser.municipalityId && coUser.municipalityId !== municipalityId) {
+          return NextResponse.json({ error: 'Uno o más co-responsables no pertenecen a esta municipalidad' }, { status: 400 })
+        }
+      }
+    }
+
     if (validCoAssigneeIds.length > 0) {
       await prisma.emergencyCoAssignee.createMany({
         data: validCoAssigneeIds.map((userId) => ({ emergencyId: emergency.id, userId })),

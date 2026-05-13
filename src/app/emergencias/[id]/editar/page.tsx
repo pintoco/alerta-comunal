@@ -18,11 +18,19 @@ export default async function EditarEmergenciaPage({
 
   const { id } = await params
 
-  const emergency = await prisma.emergency.findUnique({ where: { id } })
+  const raw = await prisma.emergency.findUnique({
+    where: { id },
+    include: {
+      coAssignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+    },
+  })
 
-  if (!emergency) notFound()
+  if (!raw) notFound()
 
-  if (!canAccessEmergency(session, emergency.municipalityId)) {
+  const { coAssignees: rawCo, ...emergencyRest } = raw
+  const emergency = { ...emergencyRest, coAssignees: rawCo.map((ca) => ca.user) }
+
+  if (!canAccessEmergency(session, emergencyRest.municipalityId)) {
     redirect('/emergencias')
   }
 

@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { requireAuth, requireRole } from '@/lib/permissions'
+import { writeAuditLog } from '@/lib/audit'
 
 const templateSchema = z.object({
   type: z.enum(['ASSIGNMENT', 'NEW_REPORT']),
   subject: z.string().min(1).max(300),
-  body: z.string().min(1),
+  body: z.string().min(1).max(50000),
   enabled: z.boolean().optional().default(true),
 })
 
@@ -55,10 +56,25 @@ export async function POST(
 
   const { type, subject, body: tplBody, enabled } = result.data
 
+  const isNew = !(await prisma.municipalityEmailTemplate.findUnique({
+    where: { municipalityId_type: { municipalityId: id, type } },
+    select: { id: true },
+  }))
+
   const template = await prisma.municipalityEmailTemplate.upsert({
     where: { municipalityId_type: { municipalityId: id, type } },
     create: { municipalityId: id, type, subject, body: tplBody, enabled: enabled ?? true },
     update: { subject, body: tplBody, enabled: enabled ?? true },
+  })
+
+  await writeAuditLog({
+    action: isNew ? 'EMAIL_TEMPLATE_CREATED' : 'EMAIL_TEMPLATE_UPDATED',
+    entityType: 'EMAIL_TEMPLATE',
+    entityId: template.id,
+    entityLabel: `${id}/${type}`,
+    userId: session.id,
+    userName: session.name,
+    metadata: { municipalityId: id, type, enabled },
   })
 
   return NextResponse.json(template)
