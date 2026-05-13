@@ -634,8 +634,8 @@ Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca
 
 ### Corto plazo (próximos sprints)
 
-- [ ] Múltiples responsables por emergencia (co-asignados) — requiere tabla join o array en schema
-- [ ] Templates de correo configurables por municipalidad — nuevo modelo `MunicipalityEmailTemplate`
+- [x] Múltiples responsables por emergencia (co-asignados) — tabla `EmergencyCoAssignee` + checkboxes en formulario
+- [x] Templates de correo configurables por municipalidad — modelo `MunicipalityEmailTemplate` + editor SUPER_ADMIN
 - [ ] Webhooks configurables por municipalidad — notificaciones HTTP a sistemas externos
 
 ### Largo plazo
