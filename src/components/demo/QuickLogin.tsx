@@ -3,58 +3,64 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-const DEMO_USERS = [
-  {
-    role: 'SUPER_ADMIN',
-    label: 'Super Administrador',
-    email: 'superadmin@alertacomunal.cl',
-    password: 'SuperAdmin123',
-    badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-    dot: 'bg-purple-400',
-    desc: 'Vista global de plataforma · gestión de municipios y usuarios',
-  },
-  {
-    role: 'ADMIN',
-    label: 'Administrador Municipal',
-    email: 'ppinto@elementalpro.cl',
-    password: 'Admin123456',
-    badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-    dot: 'bg-blue-400',
-    desc: 'Municipalidad Demo · gestión completa de emergencias',
-  },
-  {
-    role: 'OPERADOR',
-    label: 'Operador',
-    email: 'mgonzalez@alertacomunal.cl',
-    password: 'Operador123',
-    badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-    dot: 'bg-cyan-400',
-    desc: 'Municipalidad Demo · María González',
-  },
-  {
-    role: 'OPERADOR',
-    label: 'Operador',
-    email: 'cmartinez@alertacomunal.cl',
-    password: 'Operador123',
-    badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-    dot: 'bg-cyan-400',
-    desc: 'Municipalidad Demo · Carlos Martínez',
-  },
-  {
-    role: 'VISUALIZADOR',
-    label: 'Visualizador',
-    email: 'visualizador@alertacomunal.cl',
-    password: 'Visualizador123',
-    badge: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
-    dot: 'bg-slate-400',
-    desc: 'Municipalidad Demo · solo lectura',
-  },
-]
+const IS_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+
+const DEMO_USERS = IS_DEMO
+  ? [
+      {
+        role: 'SUPER_ADMIN',
+        label: 'Super Administrador',
+        email: 'superadmin@alertacomunal.cl',
+        password: 'SuperAdmin123',
+        badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+        dot: 'bg-purple-400',
+        desc: 'Vista global de plataforma · gestión de municipios y usuarios',
+      },
+      {
+        role: 'ADMIN',
+        label: 'Administrador Municipal',
+        email: 'ppinto@elementalpro.cl',
+        password: 'Admin123456',
+        badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+        dot: 'bg-blue-400',
+        desc: 'Municipalidad Demo · gestión completa de emergencias',
+      },
+      {
+        role: 'OPERADOR',
+        label: 'Operador',
+        email: 'mgonzalez@alertacomunal.cl',
+        password: 'Operador123',
+        badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+        dot: 'bg-cyan-400',
+        desc: 'Municipalidad Demo · María González',
+      },
+      {
+        role: 'OPERADOR',
+        label: 'Operador',
+        email: 'cmartinez@alertacomunal.cl',
+        password: 'Operador123',
+        badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+        dot: 'bg-cyan-400',
+        desc: 'Municipalidad Demo · Carlos Martínez',
+      },
+      {
+        role: 'VISUALIZADOR',
+        label: 'Visualizador',
+        email: 'visualizador@alertacomunal.cl',
+        password: 'Visualizador123',
+        badge: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+        dot: 'bg-slate-400',
+        desc: 'Municipalidad Demo · solo lectura',
+      },
+    ]
+  : []
 
 export default function QuickLogin() {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  if (!IS_DEMO) return null
 
   const login = async (email: string, password: string) => {
     setLoading(email)

@@ -67,8 +67,8 @@ export default async function Home() {
           </Link>
         </div>
 
-        {/* Demo quick-login — SOLO PARA PRUEBAS */}
-        <QuickLogin />
+        {/* Demo quick-login — solo visible si NEXT_PUBLIC_DEMO_MODE=true */}
+        {process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && <QuickLogin />}
 
         {/* Features */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full text-left mt-12">

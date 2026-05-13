@@ -9,10 +9,23 @@ import {
   sendMunicipalityNewReportEmail,
   isEmailEnabled,
 } from '@/lib/email'
+import { checkRateLimit, getClientIpFromRequest } from '@/lib/rate-limit'
 
 // ─── GET /api/reporte-publico?code=EMG-XXXX-XXXX ─────────────────────────────
 // Consulta pública de estado por código. No expone datos internos sensibles.
 export async function GET(request: Request) {
+  const ip = getClientIpFromRequest(request)
+  const rateLimit = await checkRateLimit(`public-report-get:${ip}`, 30, 10 * 60 * 1000)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Demasiadas consultas. Intenta nuevamente más tarde.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(rateLimit.retryAfterSeconds ?? 600) },
+      }
+    )
+  }
+
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')?.trim().toUpperCase()
 
@@ -52,6 +65,18 @@ export async function GET(request: Request) {
 // Crea un reporte ciudadano. Acepta multipart/form-data para soportar foto opcional.
 export async function POST(request: Request) {
   try {
+    const ip = getClientIpFromRequest(request)
+    const rateLimit = await checkRateLimit(`public-report-post:${ip}`, 5, 15 * 60 * 1000)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Demasiados reportes enviados. Intenta nuevamente más tarde.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rateLimit.retryAfterSeconds ?? 900) },
+        }
+      )
+    }
+
     const formData = await request.formData()
 
     const rawLatitude = formData.get('latitude')

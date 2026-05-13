@@ -113,3 +113,12 @@ export async function resetRateLimit(key: string): Promise<void> {
 
   resetMemory(key)
 }
+
+/** Extracts the client IP from a standard Web API Request (API routes). */
+export function getClientIpFromRequest(request: Request): string {
+  return (
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    'unknown'
+  )
+}
