@@ -20,20 +20,22 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 
 ## Funcionalidades
 
-- Login seguro con roles (ADMIN, OPERADOR, VISUALIZADOR) y rate limiting (5 intentos / 15 min)
-- Dashboard con estadísticas en tiempo real y KPIs operacionales
-- CRUD completo de emergencias con código automático (EMG-2026-XXXX)
-- Mapa interactivo con marcadores por prioridad (interno y público)
-- Subida de evidencias fotográficas (almacenamiento local o MinIO/S3) con limpieza automática al eliminar emergencias
-- Gestión de tareas por emergencia con auditoría de cambios
-- Formulario ciudadano público en `/reportar` (sin login) con ubicación GPS, geocodificación y foto opcional
-- Mapa público ciudadano en `/mapa-publico` (sin login) con emergencias activas en tiempo real
-- Consulta pública de estado de reporte en `/consulta` (sin login)
-- Reporte imprimible y exportable a PDF por emergencia, con historial completo y bloque de firma
-- Exportación CSV con todos los filtros activos
-- Historial de actividad completo (creación, cambios de estado, tareas, evidencias, correos)
-- Filtros avanzados de búsqueda (estado, prioridad, tipo, sector, rango de fechas, texto libre)
-- Notificaciones por correo con preferencias configurables por usuario
+- Login seguro con roles (SUPER_ADMIN, ADMIN, OPERADOR, VISUALIZADOR) y rate limiting Redis distribuido (5 intentos / 15 min, fallback a memoria)
+- Dashboard con KPIs en tiempo real vía SSE — reconexión automática, indicador "En vivo", sin polling
+- CRUD completo de emergencias con código automático (EMG-2026-XXXX) y paginación (50/página)
+- Mapa interactivo con marcadores por prioridad (interno y público ciudadano sin login)
+- Subida de evidencias fotográficas (local o MinIO/S3) con limpieza automática al eliminar emergencias
+- Gestión de tareas por emergencia con historial de actividad completo
+- Formulario ciudadano público en `/reportar` (sin login) con GPS, geocodificación y foto opcional; rate limiting 5 reportes/IP/15min
+- Mapa público ciudadano en `/mapa-publico` (sin login) con emergencias activas; rate limiting 60 req/IP/5min
+- Consulta pública de estado en `/consulta` (sin login); rate limiting 30 req/IP/10min
+- Reporte imprimible/PDF por emergencia con historial completo y bloque de firma
+- Exportación CSV con filtros activos; PII oculto para VISUALIZADOR
+- Filtros avanzados: estado, prioridad, tipo, sector, rango de fechas, texto libre
+- Notificaciones por correo (Resend) con preferencias configurables por usuario
+- **Panel de auditoría de seguridad** (`/admin/auditoria`) — log permanente de eventos críticos del sistema
+- **Panel de uso por municipalidad** — 6 KPIs, distribución por tipo, emergencias recientes
+- Validación de usuario activo en cada request — bloqueo inmediato sin esperar expiración JWT
 
 ## Administración SaaS
 
@@ -51,8 +53,10 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 Disponible solo para `SUPER_ADMIN`. Incluye:
 
 - **Dashboard global**: total de municipalidades, usuarios y emergencias en toda la plataforma
-- **Municipalidades** (`/admin/municipalidades`): listado, crear, editar, activar/desactivar
+- **Municipalidades** (`/admin/municipalidades`): listado con emergencias activas por municipio, crear, editar, activar/desactivar
+- **Detalle de municipalidad** (`/admin/municipalidades/[id]`): 6 KPIs operacionales, distribución por tipo de emergencia con barras horizontales, emergencias recientes, gestión de usuarios
 - **Usuarios** (`/admin/usuarios`): listado global, crear, editar rol/municipalidad, activar/desactivar, cambiar contraseña
+- **Auditoría** (`/admin/auditoria`): log permanente de eventos de seguridad — EMERGENCY_DELETED, LOGIN_FAILED, RATE_LIMIT_HIT, EMAIL_SENT/FAILED; filtrable y paginado
 
 ### Gestión de municipalidades
 
@@ -214,11 +218,8 @@ NEXT_PUBLIC_DEMO_MODE=false
 ### 3. Inicializar base de datos
 
 ```bash
-# Crear tablas desde el schema (sin archivos de migración)
-npx prisma db push
-
-# Cargar datos iniciales (admin + usuarios + emergencias de ejemplo)
-npm run prisma:seed
+# Aplica migraciones y carga datos iniciales (todo en uno)
+npm run prisma:setup
 ```
 
 ### 4. Crear carpeta de uploads
@@ -255,14 +256,16 @@ Accede a [http://localhost:3000](http://localhost:3000)
 ## Comandos disponibles
 
 ```bash
-npm run dev               # Desarrollo con hot-reload
-npm run build             # Build para producción
-npm run start             # Iniciar servidor de producción
-npm run lint              # Verificar código
-npm run prisma:generate   # Generar cliente Prisma
-npm run prisma:push       # Sincronizar schema con la DB (sin migraciones)
-npm run prisma:seed       # Cargar datos de ejemplo
-npm run prisma:setup      # prisma migrate deploy + seed (todo en uno)
+npm run dev                 # Desarrollo con hot-reload
+npm run build               # Build para producción
+npm run start               # Iniciar servidor de producción
+npm run lint                # Verificar código
+npm run prisma:generate     # Generar cliente Prisma
+npm run prisma:push         # Sincronizar schema directo (solo desarrollo, sin migraciones)
+npm run prisma:migrate      # Aplicar migraciones pendientes (prisma migrate deploy)
+npm run prisma:migrate:dev  # Crear nueva migración en desarrollo (prisma migrate dev)
+npm run prisma:seed         # Cargar datos de ejemplo
+npm run prisma:setup        # migrate deploy + seed (todo en uno)
 ```
 
 ## Deploy en Railway
@@ -320,9 +323,15 @@ Sin volumen, las imágenes se pierden en cada deploy (el reporte se crea igualme
 |-------|-------|
 | Build Command | `npm run build` |
 | Start Command | `npm run start` |
-| Release Command | `npx prisma db push && npx prisma db seed` |
+| Release Command | `npx prisma migrate deploy && npx prisma db seed` |
 
 > El `postinstall` ejecuta `prisma generate` automáticamente al hacer `npm install`.
+
+> **Primera vez con DB ya existente** (creada con `prisma db push`): ejecutar una sola vez antes de cambiar el Release Command:
+> ```bash
+> railway run npx prisma migrate resolve --applied 20260512000000_init
+> ```
+> Esto marca la migración inicial como ya aplicada sin re-ejecutar el SQL.
 
 ### Paso 6: Deploy
 
@@ -346,7 +355,10 @@ Railway detecta el push a `main` y despliega automáticamente. El primer deploy 
 ```
 alerta-comunal/
 ├── prisma/
-│   ├── schema.prisma          # Modelos: User, Emergency, Task, Evidence, ActivityLog, Municipality
+│   ├── schema.prisma          # Modelos: Municipality, User, Emergency, Task, Evidence, ActivityLog, AuditLog
+│   ├── migrations/
+│   │   ├── migration_lock.toml
+│   │   └── 20260512000000_init/migration.sql
 │   └── seed.ts                # Admin + operadores + municipalidades + emergencias de ejemplo
 ├── public/
 │   └── uploads/               # Imágenes subidas localmente (gitignored)
@@ -359,21 +371,22 @@ alerta-comunal/
 │   │   │   ├── evidencias/    # Subida y eliminación de evidencias
 │   │   │   ├── reporte-publico/ # GET (consulta por código) + POST (nuevo reporte ciudadano)
 │   │   │   ├── mapa-publico/  # GET emergencias activas (público, sin auth)
-│   │   │   ├── dashboard/     # KPIs y estadísticas
-│   │   │   └── admin/         # CRUD municipalidades y usuarios (SUPER_ADMIN)
+│   │   │   ├── dashboard/     # stats/ (KPIs snapshot) + stream/ (SSE tiempo real)
+│   │   │   └── admin/         # CRUD municipalidades, usuarios y audit-log (SUPER_ADMIN)
 │   │   ├── dashboard/         # Dashboard con estadísticas en tiempo real
 │   │   ├── emergencias/       # Listado, nueva, detalle, editar, reporte PDF
 │   │   ├── mapa/              # Mapa interactivo interno (requiere login)
 │   │   ├── mapa-publico/      # Mapa público ciudadano (sin login)
 │   │   ├── reportar/          # Formulario público ciudadano (con geocodificación y foto)
 │   │   ├── consulta/          # Consulta pública de estado por código
-│   │   ├── admin/             # Panel SUPER_ADMIN: municipalidades y usuarios
+│   │   ├── admin/             # Panel SUPER_ADMIN: municipalidades, usuarios y auditoría
 │   │   ├── login/             # Autenticación
 │   │   ├── not-found.tsx      # Página 404
 │   │   └── layout.tsx         # Layout raíz
 │   ├── components/
-│   │   ├── admin/             # UserForm, MunicipalityForm (con preferencias de notificación)
-│   │   ├── dashboard/         # StatsCard, RecentEmergencies, KPICards
+│   │   ├── admin/             # UserForm, MunicipalityForm, MunicipalityToggle, UserToggle
+│   │   ├── dashboard/         # DashboardClient (SSE client), StatsCard, KPICards
+│   │   ├── demo/              # QuickLogin (visible solo si NEXT_PUBLIC_DEMO_MODE=true)
 │   │   ├── emergencies/       # EmergencyForm, EmergencyTable, EmergencyFilters,
 │   │   │                      # TaskList, EvidenceGallery, PrintButtons,
 │   │   │                      # LocationPicker (GPS+geocoding+mapa), MiniMap (Leaflet)
@@ -382,14 +395,17 @@ alerta-comunal/
 │   │   └── ui/                # Button, Modal, Alert, Loading
 │   ├── lib/
 │   │   ├── auth.ts            # JWT / sesión (jose)
+│   │   ├── audit.ts           # writeAuditLog() — helper fire-and-forget para AuditLog
 │   │   ├── config.ts          # Configuración centralizada (municipalityConfig)
+│   │   ├── dashboard.ts       # getDashboardStats() — queries optimizadas para KPIs
 │   │   ├── email.ts           # Resend: sendEmergencyAssignmentEmail, sendMunicipalityNewReportEmail
-│   │   ├── permissions.ts     # requireAuth, requireRole, MANAGE_ROLES
+│   │   ├── permissions.ts     # requireAuth, requireRole, requireSuperAdmin, MANAGE_ROLES
 │   │   ├── prisma.ts          # Singleton cliente Prisma
+│   │   ├── redis.ts           # getRedisClient() — singleton ioredis con fallback a null
 │   │   ├── tenant.ts          # getMunicipalityFilter, requireMunicipalityAssigned
 │   │   ├── utils.ts           # Labels, formatters (client-safe, sin Prisma)
 │   │   ├── generate-code.ts   # Generador de códigos EMG (server-only)
-│   │   ├── rate-limit.ts      # Rate limiter en memoria (login brute-force)
+│   │   ├── rate-limit.ts      # Rate limiter Redis/memoria con fallback automático
 │   │   ├── storage/
 │   │   │   ├── index.ts       # Abstracción: validateFile, saveUpload, deleteUpload
 │   │   │   ├── local.ts       # Provider local (public/uploads)
@@ -411,7 +427,8 @@ alerta-comunal/
 - **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import. El mini-mapa del `LocationPicker` usa el mismo patrón (`MiniMap.tsx` importado con `dynamic`).
 - **Prisma en cliente:** `utils.ts` no importa Prisma. La función `generateEmergencyCode()` vive en `generate-code.ts` (server-only) para evitar bundling issues.
 - **Race condition en códigos:** La función `generateEmergencyCode()` usa `COUNT` (no atómico). Los endpoints POST de emergencias implementan un loop de reintentos (máx. 3) capturando el error Prisma P2002 en el campo `code`.
-- **DB en Railway:** Se usa `prisma db push` en lugar de `prisma migrate deploy`, ya que no se generan archivos de migración localmente.
+- **Migraciones controladas:** El proyecto usa `prisma migrate deploy` con archivos versionados en `prisma/migrations/`. El Release Command de Railway las aplica automáticamente en cada deploy. Para crear una nueva migración en desarrollo: `npm run prisma:migrate:dev`.
+- **AuditLog permanente:** La tabla `AuditLog` no tiene FK constraints para sobrevivir a eliminaciones en cascada de emergencias o usuarios. Usa campos denormalizados (`userId`, `userName`, `entityId`, `entityLabel`) como strings planos. El helper `src/lib/audit.ts` es fire-and-forget.
 - **NODE_ENV en Railway:** Railway inyecta un valor no estándar en `NODE_ENV` durante el build, lo que hace que Next.js use el runtime de desarrollo y crashee en el pre-rendering. El build script usa `NODE_ENV=production next build` para forzar el runtime de producción correcto. No configurar `NODE_ENV` como variable de servicio en Railway.
 - **Almacenamiento de imágenes:** Railway usa filesystem efímero. Con `STORAGE_PROVIDER=local` las imágenes se pierden en cada redeploy salvo que se use un Railway Volume. Con `STORAGE_PROVIDER=s3` las imágenes se guardan en MinIO/S3 y la URL pública se persiste en PostgreSQL. Ver sección "Almacenamiento de evidencias" más abajo.
 
@@ -591,6 +608,11 @@ Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca
 - [x] **Preferencias de notificación por usuario** (`emailOnAssigned`, `emailOnNewReport`)
 - [x] Gestión de usuarios CRUD desde UI (crear, editar, activar/desactivar, cambiar contraseña)
 - [x] Panel multi-municipio para SUPER_ADMIN (municipalidades, usuarios, scope global)
+- [x] **Panel de uso por municipalidad** — 6 KPIs (total, activas, últimos 30 días, tasa de resolución, tiempo promedio de cierre, usuarios activos), distribución por tipo con barras horizontales, emergencias recientes, columna "Activas" en el listado
+- [x] **Panel de auditoría de seguridad** (`/admin/auditoria`) — EMERGENCY_DELETED, LOGIN_FAILED, RATE_LIMIT_HIT, EMAIL_SENT/FAILED; tabla permanente sin FK que sobrevive a eliminaciones en cascada
+- [x] **Migraciones controladas** — archivos versionados en `prisma/migrations/`, `migrate deploy` en Release Command (en reemplazo de `db push`)
+- [x] **Validación de asignación cross-municipalidad**: no se puede asignar un usuario de otra municipalidad como responsable
+- [x] **Permisos de UI por rol**: VISUALIZADOR no ve botones de crear, editar ni eliminar emergencias
 - [x] Exportación CSV con filtros activos (compatible Excel en español con BOM)
 - [x] Reporte imprimible/PDF por emergencia con historial completo y bloque de firma
 - [x] Flujo de cierre de emergencias (closedAt, closingNotes, notas obligatorias)
@@ -610,8 +632,14 @@ Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca
 - [x] **Índices de base de datos**: Emergency (municipalityId, status, createdAt y combinados), ActivityLog (emergencyId), AuditLog (action, createdAt, entityType, userId)
 - [x] **Dashboard optimizado**: cálculo de tiempo promedio de cierre limitado a últimos 90 días (máx. 500 registros) en lugar de toda la historia
 
-### Próximas iteraciones
+### Corto plazo (próximos sprints)
 
-- [ ] Integración WhatsApp Business API (notificaciones al reportante)
-- [ ] App móvil React Native
-- [ ] Webhooks configurables por municipalidad
+- [ ] Múltiples responsables por emergencia (co-asignados) — requiere tabla join o array en schema
+- [ ] Templates de correo configurables por municipalidad — nuevo modelo `MunicipalityEmailTemplate`
+- [ ] Webhooks configurables por municipalidad — notificaciones HTTP a sistemas externos
+
+### Largo plazo
+
+- [ ] Integración WhatsApp Business API (notificaciones al reportante y al ADMIN)
+- [ ] App móvil React Native para operadores en terreno
+- [ ] Backups automáticos y monitoreo (Railway Pro + Sentry o similar)
