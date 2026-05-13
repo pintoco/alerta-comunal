@@ -15,13 +15,16 @@ export function getRedisClient(): Redis | null {
   if (!global._redisClient) {
     global._redisClient = new Redis(process.env.REDIS_URL, {
       maxRetriesPerRequest: 2,
-      connectTimeout: 3000,
-      lazyConnect: false,
-      enableOfflineQueue: false,
+      connectTimeout: 5000,
+      enableOfflineQueue: true,
     })
 
     global._redisClient.on('error', (err) => {
       console.error('[Redis] connection error:', err.message)
+    })
+
+    global._redisClient.on('ready', () => {
+      console.log('[Redis] connected')
     })
   }
 
