@@ -7,19 +7,24 @@ import UserForm from '@/components/admin/UserForm'
 
 export const dynamic = 'force-dynamic'
 
-export default async function NuevoUsuarioPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ municipalityId?: string }>
-}) {
+export default async function NuevoUsuarioPage() {
   const session = await getSession()
-  if (!session || session.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  if (!session) redirect('/login')
+  if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN') redirect('/dashboard')
+  if (session.role === 'ADMIN' && !session.municipalityId) redirect('/dashboard')
 
-  const municipalities = await prisma.municipality.findMany({
-    where: { active: true },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  })
+  const isSuperAdmin = session.role === 'SUPER_ADMIN'
+
+  const municipalities = isSuperAdmin
+    ? await prisma.municipality.findMany({
+        where: { active: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      })
+    : await prisma.municipality.findUnique({
+        where: { id: session.municipalityId! },
+        select: { id: true, name: true },
+      }).then((m) => (m ? [m] : []))
 
   return (
     <MainLayout>
@@ -36,7 +41,12 @@ export default async function NuevoUsuarioPage({
           <p className="text-gray-500 text-sm mt-1">Crear usuario en la plataforma</p>
         </div>
         <div className="card p-6">
-          <UserForm mode="create" municipalities={municipalities} />
+          <UserForm
+            mode="create"
+            municipalities={municipalities}
+            isSuperAdmin={isSuperAdmin}
+            lockedMunicipalityId={isSuperAdmin ? null : session.municipalityId}
+          />
         </div>
       </div>
     </MainLayout>

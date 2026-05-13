@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSuperAdmin } from '@/lib/permissions'
+import { requireUserAdmin, ADMIN_ASSIGNABLE_ROLES } from '@/lib/permissions'
 import { writeAuditLog } from '@/lib/audit'
 import { z } from 'zod'
 
 const schema = z.object({ active: z.boolean() })
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await requireSuperAdmin()
+  const session = await requireUserAdmin()
   if (session instanceof NextResponse) return session
 
   const { id } = await params
@@ -23,6 +23,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
   }
 
+  if (session.role === 'ADMIN') {
+    if (
+      existing.municipalityId !== session.municipalityId ||
+      !(ADMIN_ASSIGNABLE_ROLES as string[]).includes(existing.role)
+    ) {
+      return NextResponse.json({ error: 'No tienes acceso a este usuario' }, { status: 403 })
+    }
+  }
+
   // Protección: SUPER_ADMIN no puede desactivarse a sí mismo si es el único activo
   if (!result.data.active && existing.id === session.id) {
     const activeSuperAdmins = await prisma.user.count({
@@ -31,7 +40,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (activeSuperAdmins <= 1) {
       return NextResponse.json(
         { error: 'No puedes desactivar el único Super Administrador activo' },
-        { status: 400 }
+        { status: 400 },
       )
     }
   }

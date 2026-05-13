@@ -23,9 +23,18 @@ const ROLE_BADGE: Record<string, string> = {
 
 export default async function AdminUsuariosPage() {
   const session = await getSession()
-  if (!session || session.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  if (!session) redirect('/login')
+  if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN') redirect('/dashboard')
+  if (session.role === 'ADMIN' && !session.municipalityId) redirect('/dashboard')
+
+  const where: Record<string, unknown> = {}
+  if (session.role === 'ADMIN') {
+    where.municipalityId = session.municipalityId
+    where.role = { in: ['OPERADOR', 'VISUALIZADOR'] }
+  }
 
   const users = await prisma.user.findMany({
+    where,
     orderBy: [{ role: 'asc' }, { name: 'asc' }],
     select: {
       id: true, name: true, email: true, role: true, active: true,
@@ -46,7 +55,9 @@ export default async function AdminUsuariosPage() {
               <span>Usuarios</span>
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Usuarios</h1>
-            <p className="text-gray-500 text-sm mt-1">{users.length} registrados</p>
+            <p className="text-gray-500 text-sm mt-1">
+              {users.length} {session.role === 'ADMIN' ? 'usuarios de tu municipalidad' : 'registrados'}
+            </p>
           </div>
           <Link href="/admin/usuarios/nuevo" className="btn-primary inline-flex items-center gap-2 text-sm">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -62,7 +73,9 @@ export default async function AdminUsuariosPage() {
               <tr>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Usuario</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Rol</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Municipalidad</th>
+                {session.role === 'SUPER_ADMIN' && (
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Municipalidad</th>
+                )}
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
                 <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Acciones</th>
               </tr>
@@ -79,9 +92,11 @@ export default async function AdminUsuariosPage() {
                       {ROLE_LABELS[u.role] ?? u.role}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-gray-600 text-xs">
-                    {u.municipality?.name ?? <span className="text-gray-400 italic">Sin municipalidad</span>}
-                  </td>
+                  {session.role === 'SUPER_ADMIN' && (
+                    <td className="px-6 py-4 text-gray-600 text-xs">
+                      {u.municipality?.name ?? <span className="text-gray-400 italic">Sin municipalidad</span>}
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <UserToggle id={u.id} active={u.active} />
                   </td>
@@ -92,6 +107,13 @@ export default async function AdminUsuariosPage() {
                   </td>
                 </tr>
               ))}
+              {users.length === 0 && (
+                <tr>
+                  <td colSpan={session.role === 'SUPER_ADMIN' ? 5 : 4} className="px-6 py-8 text-center text-sm text-gray-400">
+                    No hay usuarios registrados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

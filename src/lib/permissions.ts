@@ -99,3 +99,28 @@ export function canManageEmergencies(session: Session): boolean {
 
 /** Roles con permiso para crear/editar/eliminar emergencias */
 export const MANAGE_ROLES: UserRole[] = ['SUPER_ADMIN', 'ADMIN', 'OPERADOR']
+
+/**
+ * Requires SUPER_ADMIN or ADMIN with a municipality assigned.
+ * ADMIN without municipalityId gets 403.
+ */
+export async function requireUserAdmin(): Promise<Session | NextResponse> {
+  const session = await requireAuth()
+  if (session instanceof NextResponse) return session
+
+  if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'No tienes permisos para administrar usuarios' }, { status: 403 })
+  }
+
+  if (session.role === 'ADMIN' && !session.municipalityId) {
+    return NextResponse.json(
+      { error: 'Administrador sin municipalidad asignada. Contacte al Super Administrador.' },
+      { status: 403 },
+    )
+  }
+
+  return session
+}
+
+/** Roles that ADMIN can assign when creating/editing users */
+export const ADMIN_ASSIGNABLE_ROLES: UserRole[] = ['OPERADOR', 'VISUALIZADOR']

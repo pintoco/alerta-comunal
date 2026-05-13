@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireSuperAdmin } from '@/lib/permissions'
+import { requireUserAdmin, ADMIN_ASSIGNABLE_ROLES } from '@/lib/permissions'
 import { userCreateSchema } from '@/lib/validations/user'
 import { writeAuditLog } from '@/lib/audit'
 import bcrypt from 'bcryptjs'
 
 export async function GET(request: Request) {
-  const session = await requireSuperAdmin()
+  const session = await requireUserAdmin()
   if (session instanceof NextResponse) return session
 
   const { searchParams } = new URL(request.url)
-  const municipalityId = searchParams.get('municipalityId')
 
   const where: Record<string, unknown> = {}
-  if (municipalityId) where.municipalityId = municipalityId
+
+  if (session.role === 'SUPER_ADMIN') {
+    const municipalityId = searchParams.get('municipalityId')
+    if (municipalityId) where.municipalityId = municipalityId
+  } else {
+    // ADMIN: always scoped to their municipality, only manageable roles
+    where.municipalityId = session.municipalityId
+    where.role = { in: ADMIN_ASSIGNABLE_ROLES }
+  }
 
   const users = await prisma.user.findMany({
     where,
@@ -35,7 +42,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await requireSuperAdmin()
+  const session = await requireUserAdmin()
   if (session instanceof NextResponse) return session
 
   try {
@@ -45,11 +52,37 @@ export async function POST(request: Request) {
     if (!result.success) {
       return NextResponse.json(
         { error: 'Datos inválidos', details: result.error.flatten() },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
-    const { name, email, password, role, municipalityId, active } = result.data
+    const { name, email, password, role, municipalityId, active, emailOnAssigned, emailOnNewReport } = result.data
+
+    if (session.role === 'ADMIN') {
+      if (!(ADMIN_ASSIGNABLE_ROLES as string[]).includes(role)) {
+        return NextResponse.json(
+          { error: 'Solo puedes crear usuarios con rol Operador o Visualizador' },
+          { status: 403 },
+        )
+      }
+      if (municipalityId !== session.municipalityId) {
+        return NextResponse.json(
+          { error: 'Solo puedes crear usuarios en tu propia municipalidad' },
+          { status: 403 },
+        )
+      }
+    }
+
+    // Validate municipalityId exists
+    if (municipalityId) {
+      const mun = await prisma.municipality.findUnique({
+        where: { id: municipalityId },
+        select: { id: true },
+      })
+      if (!mun) {
+        return NextResponse.json({ error: 'Municipalidad no encontrada' }, { status: 400 })
+      }
+    }
 
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
@@ -66,6 +99,8 @@ export async function POST(request: Request) {
         role,
         municipalityId: municipalityId ?? null,
         active,
+        emailOnAssigned: emailOnAssigned ?? true,
+        emailOnNewReport: emailOnNewReport ?? true,
       },
       select: {
         id: true, name: true, email: true, role: true, active: true, municipalityId: true, createdAt: true,

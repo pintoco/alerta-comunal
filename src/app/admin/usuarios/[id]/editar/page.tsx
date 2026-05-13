@@ -13,27 +13,45 @@ export default async function EditarUsuarioPage({
   params: Promise<{ id: string }>
 }) {
   const session = await getSession()
-  if (!session || session.role !== 'SUPER_ADMIN') redirect('/dashboard')
+  if (!session) redirect('/login')
+  if (session.role !== 'SUPER_ADMIN' && session.role !== 'ADMIN') redirect('/dashboard')
+  if (session.role === 'ADMIN' && !session.municipalityId) redirect('/dashboard')
 
   const { id } = await params
 
-  const [user, municipalities] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true, name: true, email: true, role: true, active: true, municipalityId: true,
-        emailOnAssigned: true, emailOnNewReport: true,
-        municipality: { select: { name: true } },
-      },
-    }),
-    prisma.municipality.findMany({
-      where: { active: true },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
-  ])
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: {
+      id: true, name: true, email: true, role: true, active: true, municipalityId: true,
+      emailOnAssigned: true, emailOnNewReport: true,
+      municipality: { select: { name: true } },
+    },
+  })
 
   if (!user) notFound()
+
+  if (session.role === 'ADMIN') {
+    // ADMIN can only edit OPERADOR/VISUALIZADOR of their own municipality
+    if (
+      user.municipalityId !== session.municipalityId ||
+      !['OPERADOR', 'VISUALIZADOR'].includes(user.role)
+    ) {
+      redirect('/admin/usuarios')
+    }
+  }
+
+  const isSuperAdmin = session.role === 'SUPER_ADMIN'
+
+  const municipalities = isSuperAdmin
+    ? await prisma.municipality.findMany({
+        where: { active: true },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      })
+    : await prisma.municipality.findUnique({
+        where: { id: session.municipalityId! },
+        select: { id: true, name: true },
+      }).then((m) => (m ? [m] : []))
 
   return (
     <MainLayout>
@@ -65,6 +83,8 @@ export default async function EditarUsuarioPage({
               emailOnNewReport: user.emailOnNewReport,
             }}
             municipalities={municipalities}
+            isSuperAdmin={isSuperAdmin}
+            lockedMunicipalityId={isSuperAdmin ? null : session.municipalityId}
           />
         </div>
       </div>
