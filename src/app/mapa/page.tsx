@@ -8,6 +8,32 @@ import MapWrapper from '@/components/map/MapWrapper'
 import type { Emergency } from '@/types'
 import { getEmergencyScope } from '@/lib/tenant'
 
+const REGION_CENTERS: Record<string, [number, number]> = {
+  'Arica y Parinacota': [-18.47, -70.33],
+  'Tarapacá': [-20.21, -70.15],
+  'Antofagasta': [-23.65, -70.40],
+  'Atacama': [-27.37, -70.33],
+  'Coquimbo': [-30.00, -71.00],
+  'Valparaíso': [-33.03, -71.65],
+  'Metropolitana': [-33.46, -70.65],
+  'Metropolitana de Santiago': [-33.46, -70.65],
+  "O'Higgins": [-34.58, -71.00],
+  'Libertador General Bernardo O\'Higgins': [-34.58, -71.00],
+  'Maule': [-35.43, -71.67],
+  'Ñuble': [-36.73, -72.10],
+  'Biobío': [-37.47, -72.35],
+  'Bío-Bío': [-37.47, -72.35],
+  'La Araucanía': [-38.95, -72.67],
+  'Los Ríos': [-39.83, -73.23],
+  'Los Lagos': [-41.47, -72.93],
+  'Aysén': [-46.00, -74.00],
+  'Aysén del General Carlos Ibáñez del Campo': [-46.00, -74.00],
+  'Magallanes': [-53.16, -70.91],
+  'Magallanes y de la Antártica Chilena': [-53.16, -70.91],
+}
+
+const CHILE_DEFAULT: [number, number] = [-35.68, -71.54]
+
 export default async function MapaPage() {
   const session = await getSession()
   if (!session) redirect('/login')
@@ -20,18 +46,41 @@ export default async function MapaPage() {
     longitude: { not: null },
   }
 
-  const emergencies = scope === false ? [] : await prisma.emergency.findMany({
-    where: {
-      ...geoBase,
-      status: { notIn: ['CERRADA', 'DESCARTADA'] },
-    },
-    include: {
-      assignedTo: { select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const [emergencies, allCount] = await Promise.all([
+    scope === false ? Promise.resolve([]) : prisma.emergency.findMany({
+      where: {
+        ...geoBase,
+        status: { notIn: ['CERRADA', 'DESCARTADA'] },
+      },
+      include: {
+        assignedTo: { select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    scope === false ? Promise.resolve(0) : prisma.emergency.count({ where: geoBase }),
+  ])
 
-  const allCount = scope === false ? 0 : await prisma.emergency.count({ where: geoBase })
+  // Determine map center: use emergencies centroid if available, otherwise municipality region
+  let defaultCenter: [number, number] = CHILE_DEFAULT
+  let defaultZoom = session.role === 'SUPER_ADMIN' ? 6 : 11
+
+  if (session.role !== 'SUPER_ADMIN' && session.municipalityId) {
+    const muni = await prisma.municipality.findUnique({
+      where: { id: session.municipalityId },
+      select: { region: true },
+    })
+    if (muni?.region) {
+      const rc = REGION_CENTERS[muni.region]
+      if (rc) defaultCenter = rc
+    }
+  }
+
+  if (emergencies.length > 0) {
+    const avgLat = emergencies.reduce((s, e) => s + (e.latitude ?? 0), 0) / emergencies.length
+    const avgLng = emergencies.reduce((s, e) => s + (e.longitude ?? 0), 0) / emergencies.length
+    defaultCenter = [avgLat, avgLng]
+    defaultZoom = 13
+  }
 
   return (
     <MainLayout>
@@ -72,6 +121,8 @@ export default async function MapaPage() {
         <MapWrapper
           emergencies={emergencies as unknown as Emergency[]}
           height="600px"
+          center={defaultCenter}
+          zoom={defaultZoom}
         />
 
         <div className="card p-4 text-sm text-gray-500 flex items-center gap-2">

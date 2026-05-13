@@ -71,7 +71,7 @@ const adminNavItems: NavItem[] = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
-    roles: ['SUPER_ADMIN'],
+    roles: ['SUPER_ADMIN', 'ADMIN'],
   },
 ]
 
@@ -145,18 +145,20 @@ export default function Sidebar({ userRole, userName, municipalityName, municipa
             </Link>
           ))}
 
-        {/* Sección Administración (solo SUPER_ADMIN) */}
-        {userRole === 'SUPER_ADMIN' && (
+        {/* Sección Administración */}
+        {(userRole === 'SUPER_ADMIN' || userRole === 'ADMIN') && (
           <div className="pt-4">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 mb-2">
               Administración
             </p>
-            {adminNavItems.map((item) => (
-              <Link key={item.href} href={item.href} className={navLinkClass(item.href)}>
-                {item.icon}
-                {item.label}
-              </Link>
-            ))}
+            {adminNavItems
+              .filter((item) => !item.roles || item.roles.includes(userRole))
+              .map((item) => (
+                <Link key={item.href} href={item.href} className={navLinkClass(item.href)}>
+                  {item.icon}
+                  {item.label}
+                </Link>
+              ))}
           </div>
         )}
 
