@@ -11,9 +11,8 @@ export default async function NuevaEmergenciaPage() {
   if (!session) redirect('/login')
   if (session.role === 'VISUALIZADOR') redirect('/dashboard')
 
-  // Filtrar usuarios por municipalidad: ADMIN ve todos, OPERADOR solo su municipalidad
   const usersWhere: Record<string, unknown> = { active: true }
-  if (session.role !== 'ADMIN' && session.municipalityId) {
+  if (session.role !== 'SUPER_ADMIN' && session.municipalityId) {
     usersWhere.municipalityId = session.municipalityId
   }
 
