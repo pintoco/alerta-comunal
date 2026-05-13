@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const data = result.data
+    const { coAssigneeIds = [], ...emergencyData } = result.data
 
     // Determinar municipalityId: siempre desde sesión, nunca desde el cliente
     let municipalityId: string | null = session.municipalityId ?? null
@@ -104,6 +104,8 @@ export async function POST(request: Request) {
       const demo = await prisma.municipality.findFirst({ where: { slug: 'demo' }, select: { id: true } })
       municipalityId = demo?.id ?? null
     }
+
+    const data = emergencyData
 
     // Validate assignedToId belongs to the target municipality
     if (data.assignedToId && municipalityId) {
@@ -175,6 +177,17 @@ export async function POST(request: Request) {
       },
     })
 
+    // Crear co-asignados
+    const validCoAssigneeIds = coAssigneeIds.filter(
+      (id) => id !== data.assignedToId && id.length > 0,
+    )
+    if (validCoAssigneeIds.length > 0) {
+      await prisma.emergencyCoAssignee.createMany({
+        data: validCoAssigneeIds.map((userId) => ({ emergencyId: emergency.id, userId })),
+        skipDuplicates: true,
+      })
+    }
+
     // Enviar correo de asignación si se asignó responsable al crear
     if (isEmailEnabled() && data.assignedToId) {
       try {
@@ -196,6 +209,7 @@ export async function POST(request: Request) {
             sector: emergency.sector,
             description: emergency.description,
             assignedByName: session.name,
+            municipalityId,
           })
 
           await prisma.activityLog.create({
@@ -221,6 +235,36 @@ export async function POST(request: Request) {
         }
       } catch (emailErr) {
         console.error('[emergencias] Error al enviar correo de asignación:', emailErr)
+      }
+    }
+
+    // Enviar correo a co-asignados
+    if (isEmailEnabled() && validCoAssigneeIds.length > 0) {
+      try {
+        const coUsers = await prisma.user.findMany({
+          where: { id: { in: validCoAssigneeIds }, active: true, emailOnAssigned: true },
+          select: { name: true, email: true },
+        })
+        for (const coUser of coUsers) {
+          if (coUser.email) {
+            await sendEmergencyAssignmentEmail(coUser.email, {
+              id: emergency.id,
+              code: emergency.code,
+              type: emergency.type,
+              priority: emergency.priority,
+              status: emergency.status,
+              region: emergency.region,
+              commune: emergency.commune,
+              address: emergency.address,
+              sector: emergency.sector,
+              description: emergency.description,
+              assignedByName: session.name,
+              municipalityId,
+            })
+          }
+        }
+      } catch (emailErr) {
+        console.error('[emergencias] Error al enviar correo a co-asignados:', emailErr)
       }
     }
 

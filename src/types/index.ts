@@ -26,6 +26,8 @@ export type ReportOrigin = 'INTERNO' | 'CIUDADANO'
 
 export type TaskStatus = 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADA' | 'CANCELADA'
 
+export type EmailTemplateType = 'ASSIGNMENT' | 'NEW_REPORT'
+
 export interface Municipality {
   id: string
   name: string
@@ -67,6 +69,7 @@ export interface Emergency {
   origin: ReportOrigin
   assignedToId?: string | null
   assignedTo?: User | null
+  coAssignees?: { id: string; name: string; email: string }[]
   municipalityId?: string | null
   occurredAt?: string | null
   closedAt?: string | null
@@ -131,6 +134,17 @@ export interface DashboardStats {
   cerrada: number
   descartada: number
   critica: number
+}
+
+export interface EmailTemplate {
+  id: string
+  municipalityId: string
+  type: EmailTemplateType
+  subject: string
+  body: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 export interface EmergencyFilters {

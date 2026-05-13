@@ -35,6 +35,9 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
       ? { lat: initial.latitude, lng: initial.longitude }
       : null
   )
+  const [coAssigneeIds, setCoAssigneeIds] = useState<string[]>(
+    initial?.coAssignees?.map((u) => u.id) ?? [],
+  )
 
   const {
     register,
@@ -91,7 +94,7 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, coAssigneeIds }),
       })
 
       if (!res.ok) {
@@ -293,14 +296,47 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
       {/* Sección: Asignación */}
       <div className="card p-6">
         <h3 className="text-base font-semibold text-gray-900 mb-4">Asignación</h3>
-        <div className="max-w-sm">
-          <label className="form-label">Responsable asignado</label>
-          <select {...register('assignedToId')} className="form-input">
-            <option value="">Sin asignar</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div>
+            <label className="form-label">Responsable principal</label>
+            <select {...register('assignedToId')} className="form-input">
+              <option value="">Sin asignar</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {users.length > 0 && (
+            <div>
+              <label className="form-label">Co-responsables</label>
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                {users
+                  .filter((u) => u.id !== watch('assignedToId'))
+                  .map((u) => (
+                    <label
+                      key={u.id}
+                      className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        checked={coAssigneeIds.includes(u.id)}
+                        onChange={(e) =>
+                          setCoAssigneeIds((prev) =>
+                            e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id),
+                          )
+                        }
+                      />
+                      <span className="text-sm text-gray-700">{u.name}</span>
+                    </label>
+                  ))}
+                {users.filter((u) => u.id !== watch('assignedToId')).length === 0 && (
+                  <p className="px-3 py-2 text-sm text-gray-400">No hay otros usuarios disponibles</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -26,6 +26,7 @@ export async function GET(
     where: { id },
     include: {
       assignedTo: { select: { id: true, name: true, email: true, role: true } },
+      coAssignees: { include: { user: { select: { id: true, name: true, email: true } } } },
       evidences: { orderBy: { createdAt: 'desc' } },
       tasks: {
         include: { assignedTo: { select: { id: true, name: true } } },
@@ -43,7 +44,11 @@ export async function GET(
     return NextResponse.json({ error: 'Emergencia no encontrada' }, { status: 404 })
   }
 
-  return NextResponse.json(emergency)
+  const { coAssignees: rawCo, ...rest } = emergency
+  return NextResponse.json({
+    ...rest,
+    coAssignees: rawCo.map((ca) => ca.user),
+  })
 }
 
 export async function PUT(
@@ -75,8 +80,12 @@ export async function PUT(
       )
     }
 
-    const data = result.data
-    const previous = await prisma.emergency.findUnique({ where: { id } })
+    const { coAssigneeIds = [], ...emergencyData } = result.data
+    const data = emergencyData
+    const previous = await prisma.emergency.findUnique({
+      where: { id },
+      include: { coAssignees: { select: { userId: true } } },
+    })
     if (!previous) {
       return NextResponse.json({ error: 'Emergencia no encontrada' }, { status: 404 })
     }
@@ -134,6 +143,66 @@ export async function PUT(
       })
     }
 
+    // Sync co-assignees
+    const existingCoIds = new Set(previous.coAssignees.map((ca) => ca.userId))
+    const newCoIds = new Set(
+      coAssigneeIds.filter((cid) => cid !== data.assignedToId && cid.length > 0),
+    )
+    const toAdd = [...newCoIds].filter((cid) => !existingCoIds.has(cid))
+    const toRemove = [...existingCoIds].filter((cid) => !newCoIds.has(cid))
+
+    if (toRemove.length > 0) {
+      await prisma.emergencyCoAssignee.deleteMany({
+        where: { emergencyId: id, userId: { in: toRemove } },
+      })
+    }
+    if (toAdd.length > 0) {
+      await prisma.emergencyCoAssignee.createMany({
+        data: toAdd.map((userId) => ({ emergencyId: id, userId })),
+        skipDuplicates: true,
+      })
+    }
+    if (toAdd.length > 0 || toRemove.length > 0) {
+      await prisma.activityLog.create({
+        data: {
+          emergencyId: id,
+          userId: session.id,
+          action: 'CO_ASSIGNED',
+          description: `Co-responsables actualizados por ${session.name}`,
+        },
+      })
+    }
+
+    // Email newly added co-assignees
+    if (isEmailEnabled() && toAdd.length > 0) {
+      try {
+        const coUsers = await prisma.user.findMany({
+          where: { id: { in: toAdd }, active: true, emailOnAssigned: true },
+          select: { name: true, email: true },
+        })
+        for (const coUser of coUsers) {
+          if (coUser.email) {
+            await sendEmergencyAssignmentEmail(coUser.email, {
+              id: emergency.id,
+              code: emergency.code,
+              type: emergency.type,
+              priority: emergency.priority,
+              status: emergency.status,
+              region: emergency.region,
+              commune: emergency.commune,
+              address: emergency.address,
+              sector: emergency.sector,
+              description: emergency.description,
+              assignedByName: session.name,
+              municipalityId: previous.municipalityId,
+            })
+          }
+        }
+      } catch (emailErr) {
+        console.error('[emergencias] Error al enviar correo a co-asignados:', emailErr)
+      }
+    }
+
     // Send assignment email if assignee changed to a new (non-null) user
     if (isEmailEnabled() && data.assignedToId && data.assignedToId !== previous.assignedToId) {
       try {
@@ -155,6 +224,7 @@ export async function PUT(
             sector: emergency.sector,
             description: emergency.description,
             assignedByName: session.name,
+            municipalityId: previous.municipalityId,
           })
 
           await prisma.activityLog.create({

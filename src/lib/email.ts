@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { emailConfig, appUrl } from './config'
+import { prisma } from './prisma'
 
 // ── Inline labels (no importa utils para evitar bundling en cliente) ──────────
 const TYPE_LABELS: Record<string, string> = {
@@ -113,6 +114,29 @@ export async function sendEmail(params: {
   }
 }
 
+// ── Custom template support ───────────────────────────────────────────────────
+
+async function getEmailTemplate(
+  municipalityId: string | null | undefined,
+  type: 'ASSIGNMENT' | 'NEW_REPORT',
+): Promise<{ subject: string; body: string } | null> {
+  if (!municipalityId) return null
+  try {
+    const tpl = await prisma.municipalityEmailTemplate.findUnique({
+      where: { municipalityId_type: { municipalityId, type } },
+      select: { subject: true, body: true, enabled: true },
+    })
+    if (!tpl?.enabled) return null
+    return { subject: tpl.subject, body: tpl.body }
+  } catch {
+    return null
+  }
+}
+
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '')
+}
+
 // ── Template: nuevo reporte ciudadano al administrador municipal ──────────────
 
 export interface NewReportEmailData {
@@ -130,6 +154,7 @@ export interface NewReportEmailData {
   description: string
   createdAt: Date
   municipalityName?: string | null
+  municipalityId?: string | null
 }
 
 export async function sendMunicipalityNewReportEmail(
@@ -146,6 +171,32 @@ export async function sendMunicipalityNewReportEmail(
     hour: '2-digit',
     minute: '2-digit',
   })
+
+  const customTpl = await getEmailTemplate(data.municipalityId, 'NEW_REPORT')
+  if (customTpl) {
+    const vars: Record<string, string> = {
+      code: data.code,
+      type: toLabel(TYPE_LABELS, data.type),
+      priority: toLabel(PRIORITY_LABELS, data.priority),
+      status: toLabel(STATUS_LABELS, data.status),
+      region: data.region ?? '',
+      commune: data.commune ?? '',
+      address: data.address,
+      sector: data.sector ?? '',
+      reporterName: data.reporterName ?? '',
+      reporterPhone: data.reporterPhone ?? '',
+      description: data.description,
+      createdAt: created,
+      link,
+      municipalityName: data.municipalityName ?? '',
+    }
+    return sendEmail({
+      to,
+      subject: applyTemplate(customTpl.subject, vars),
+      html: applyTemplate(customTpl.body, vars),
+    })
+  }
+
   const munName = data.municipalityName ? `<strong>${esc(data.municipalityName)}</strong>` : 'la municipalidad'
 
   const html = `${emailHeader()}
@@ -219,6 +270,7 @@ export interface AssignmentEmailData {
   sector?: string | null
   description: string
   assignedByName?: string | null
+  municipalityId?: string | null
 }
 
 export async function sendEmergencyAssignmentEmail(
@@ -226,6 +278,29 @@ export async function sendEmergencyAssignmentEmail(
   data: AssignmentEmailData,
 ): Promise<EmailResult> {
   const link = `${appUrl}/emergencias/${data.id}`
+
+  const customTpl = await getEmailTemplate(data.municipalityId, 'ASSIGNMENT')
+  if (customTpl) {
+    const vars: Record<string, string> = {
+      code: data.code,
+      type: toLabel(TYPE_LABELS, data.type),
+      priority: toLabel(PRIORITY_LABELS, data.priority),
+      status: toLabel(STATUS_LABELS, data.status),
+      region: data.region ?? '',
+      commune: data.commune ?? '',
+      address: data.address,
+      sector: data.sector ?? '',
+      description: data.description,
+      assignedByName: data.assignedByName ?? '',
+      link,
+    }
+    return sendEmail({
+      to,
+      subject: applyTemplate(customTpl.subject, vars),
+      html: applyTemplate(customTpl.body, vars),
+    })
+  }
+
   const byLine = data.assignedByName
     ? `<strong>${esc(data.assignedByName)}</strong> te ha asignado una emergencia para su atención.`
     : 'Tienes una emergencia asignada para su atención.'

@@ -52,6 +52,7 @@ export const emergencySchema = z.object({
   reporterPhone: phoneSchema,
   origin: z.enum(['INTERNO', 'CIUDADANO']),
   assignedToId: z.string().optional().nullable(),
+  coAssigneeIds: z.array(z.string()).optional().default([]),
   occurredAt: dateStringSchema,
   observations: z.string().max(1000).optional().nullable(),
 })

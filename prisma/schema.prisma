@@ -48,6 +48,11 @@ enum ReportOrigin {
   CIUDADANO
 }
 
+enum EmailTemplateType {
+  ASSIGNMENT
+  NEW_REPORT
+}
+
 enum TaskStatus {
   PENDIENTE
   EN_PROCESO
@@ -65,8 +70,9 @@ model Municipality {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users       User[]
-  emergencies Emergency[]
+  users          User[]
+  emergencies    Emergency[]
+  emailTemplates MunicipalityEmailTemplate[]
 }
 
 model User {
@@ -84,9 +90,10 @@ model User {
   emailOnAssigned    Boolean @default(true)
   emailOnNewReport   Boolean @default(true)
 
-  assignedEmergencies Emergency[]   @relation("AssignedTo")
-  activityLogs        ActivityLog[]
-  tasks               Task[]
+  assignedEmergencies   Emergency[]           @relation("AssignedTo")
+  coAssignedEmergencies EmergencyCoAssignee[] @relation("CoAssignedEmergencies")
+  activityLogs          ActivityLog[]
+  tasks                 Task[]
 }
 
 model Emergency {
@@ -120,6 +127,7 @@ model Emergency {
   evidences    Evidence[]
   tasks        Task[]
   activityLogs ActivityLog[]
+  coAssignees  EmergencyCoAssignee[]
 
   @@index([municipalityId])
   @@index([status])
@@ -167,6 +175,32 @@ model ActivityLog {
   createdAt   DateTime  @default(now())
 
   @@index([emergencyId])
+}
+
+model EmergencyCoAssignee {
+  emergencyId String
+  userId      String
+  assignedAt  DateTime  @default(now())
+  emergency   Emergency @relation(fields: [emergencyId], references: [id], onDelete: Cascade)
+  user        User      @relation("CoAssignedEmergencies", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([emergencyId, userId])
+  @@index([userId])
+}
+
+model MunicipalityEmailTemplate {
+  id             String            @id @default(cuid())
+  municipalityId String
+  type           EmailTemplateType
+  subject        String
+  body           String            @db.Text
+  enabled        Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  municipality   Municipality      @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
+
+  @@unique([municipalityId, type])
+  @@index([municipalityId])
 }
 
 // Audit log global — sin FK para que no se elimine en cascada.

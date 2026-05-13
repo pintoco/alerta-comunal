@@ -272,6 +272,16 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
                 ) : (
                   <p className="text-gray-400 text-sm">Sin asignar</p>
                 )}
+                {emergency.coAssignees && emergency.coAssignees.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 mb-1">Co-responsables</p>
+                    <ul className="space-y-1">
+                      {emergency.coAssignees.map((u) => (
+                        <li key={u.id} className="text-sm text-gray-700">{u.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div className="card p-5">
