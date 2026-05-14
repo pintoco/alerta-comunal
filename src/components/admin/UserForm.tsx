@@ -232,6 +232,9 @@ function EditUserForm({
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
   const roles = isSuperAdmin ? ALL_ROLES : LIMITED_ROLES
 
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<UpdateValues>({
@@ -254,21 +257,52 @@ function EditUserForm({
 
   const onSubmit = async (data: UpdateValues) => {
     setError(null)
+    setPasswordError(null)
+
+    // Validate password fields if user wants to change password
+    if (newPassword || confirmPassword) {
+      if (newPassword.length < 8) {
+        setPasswordError('La contraseña debe tener al menos 8 caracteres')
+        return
+      }
+      if (newPassword !== confirmPassword) {
+        setPasswordError('Las contraseñas no coinciden')
+        return
+      }
+    }
+
     const payload = lockedMunicipalityId
       ? { ...data, municipalityId: lockedMunicipalityId }
       : data
+
     const res = await fetch(`/api/admin/usuarios/${userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-    if (res.ok) {
-      router.push('/admin/usuarios')
-      router.refresh()
-    } else {
+
+    if (!res.ok) {
       const b = await res.json()
       setError(b.error ?? 'Error al guardar usuario')
+      return
     }
+
+    // Change password if provided
+    if (newPassword) {
+      const pwRes = await fetch(`/api/admin/usuarios/${userId}/password`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      })
+      if (!pwRes.ok) {
+        const b = await pwRes.json()
+        setPasswordError(b.error ?? 'Error al cambiar la contraseña')
+        return
+      }
+    }
+
+    router.push('/admin/usuarios')
+    router.refresh()
   }
 
   return (
@@ -285,6 +319,38 @@ function EditUserForm({
         roles={roles}
         lockedMunicipalityId={lockedMunicipalityId}
       />
+
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          Cambiar contraseña <span className="normal-case font-normal text-gray-400">(dejar vacío para no cambiar)</span>
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="form-label">Nueva contraseña</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => { setNewPassword(e.target.value); setPasswordError(null) }}
+              className="form-input"
+              placeholder="Mínimo 8 caracteres"
+              autoComplete="new-password"
+            />
+          </div>
+          <div>
+            <label className="form-label">Confirmar contraseña</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(null) }}
+              className="form-input"
+              placeholder="Repetir nueva contraseña"
+              autoComplete="new-password"
+            />
+          </div>
+          {passwordError && <p className="text-xs text-red-500">{passwordError}</p>}
+        </div>
+      </div>
+
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={isSubmitting} className="btn-primary text-sm disabled:opacity-50">
           {isSubmitting ? 'Guardando…' : 'Guardar cambios'}
