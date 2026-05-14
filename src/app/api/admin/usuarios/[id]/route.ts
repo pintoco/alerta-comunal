@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAdmin, ADMIN_ASSIGNABLE_ROLES } from '@/lib/permissions'
+import { requireUserAdmin, requireSuperAdmin, ADMIN_ASSIGNABLE_ROLES } from '@/lib/permissions'
 import { userUpdateSchema } from '@/lib/validations/user'
 import { writeAuditLog } from '@/lib/audit'
 
@@ -114,4 +114,41 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   } catch {
     return NextResponse.json({ error: 'Error al actualizar usuario' }, { status: 500 })
   }
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await requireSuperAdmin()
+  if (session instanceof NextResponse) return session
+
+  const { id } = await params
+
+  if (id === session.id) {
+    return NextResponse.json({ error: 'No puedes eliminar tu propia cuenta' }, { status: 400 })
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id } })
+  if (!existing) {
+    return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+  }
+
+  const userLabel = `${existing.name} (${existing.email})`
+
+  await prisma.$transaction([
+    prisma.emergency.updateMany({ where: { assignedToId: id }, data: { assignedToId: null } }),
+    prisma.task.updateMany({ where: { assignedToId: id }, data: { assignedToId: null } }),
+    prisma.activityLog.updateMany({ where: { userId: id }, data: { userId: null } }),
+    prisma.emergencyCoAssignee.deleteMany({ where: { userId: id } }),
+    prisma.user.delete({ where: { id } }),
+  ])
+
+  await writeAuditLog({
+    action: 'USER_DELETED',
+    entityType: 'USER',
+    entityId: id,
+    entityLabel: userLabel,
+    userId: session.id,
+    userName: session.name,
+  })
+
+  return NextResponse.json({ success: true })
 }

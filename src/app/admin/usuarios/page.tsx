@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import UserToggle from '@/components/admin/UserToggle'
+import UserDeleteButton from '@/components/admin/UserDeleteButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,9 +102,14 @@ export default async function AdminUsuariosPage() {
                     <UserToggle id={u.id} active={u.active} />
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/admin/usuarios/${u.id}/editar`} className="text-blue-600 hover:underline text-xs">
-                      Editar
-                    </Link>
+                    <div className="inline-flex items-center gap-3">
+                      <Link href={`/admin/usuarios/${u.id}/editar`} className="text-blue-600 hover:underline text-xs">
+                        Editar
+                      </Link>
+                      {session.role === 'SUPER_ADMIN' && u.id !== session.id && (
+                        <UserDeleteButton id={u.id} />
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
