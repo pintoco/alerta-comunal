@@ -6,6 +6,7 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
+
   # Limita a 2000 peticiones/5min por IP contra cualquier ruta — red de seguridad
   # además del rate limiting propio de /api/reporte-publico y /api/auth/login.
   rule {
@@ -37,6 +38,16 @@ resource "aws_wafv2_web_acl" "main" {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
+
+        # Las evidencias fotográficas de /reportar y /emergencias superan largo
+        # el límite de inspección de body de WAF (8-64KB) — sin este override
+        # esta regla bloquea cualquier reporte ciudadano con foto adjunta.
+        rule_action_override {
+          name = "SizeRestrictions_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
     visibility_config {

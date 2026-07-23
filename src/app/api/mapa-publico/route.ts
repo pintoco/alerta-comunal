@@ -15,14 +15,20 @@ export async function GET(request: Request) {
     )
   }
 
-  const slug = process.env.PUBLIC_DEFAULT_MUNICIPALITY_SLUG
+  const { searchParams } = new URL(request.url)
+  // ?slug= permite un mapa público por municipalidad (/mapa-publico/[slug]).
+  // Sin slug, cae al comportamiento histórico de una sola municipalidad por env var.
+  const slug = searchParams.get('slug') || process.env.PUBLIC_DEFAULT_MUNICIPALITY_SLUG
 
   let municipalityId: string | undefined
   if (slug) {
     const muni = await prisma.municipality.findUnique({
       where: { slug },
-      select: { id: true },
+      select: { id: true, active: true },
     })
+    if (searchParams.get('slug') && (!muni || !muni.active)) {
+      return NextResponse.json({ error: 'Municipalidad no encontrada' }, { status: 404 })
+    }
     if (muni) municipalityId = muni.id
   }
 

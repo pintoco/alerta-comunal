@@ -116,12 +116,28 @@ export async function POST(request: Request) {
 
     const data = result.data
 
-    // ── Resolver municipalidad por región/comuna o fallback a demo ────────────
+    // ── Resolver municipalidad: slug explícito (/reportar/[slug]) tiene prioridad,
+    // luego región/comuna, luego fallback a demo ──────────────────────────────
     let municipalityId: string | null = null
     let municipalityName: string | null = null
     let assignedByCommune = false
 
-    if (data.region && data.commune) {
+    const explicitSlug = ((formData.get('municipalitySlug') as string) || '').trim()
+
+    if (explicitSlug) {
+      const muni = await prisma.municipality.findUnique({
+        where: { slug: explicitSlug },
+        select: { id: true, name: true, active: true },
+      })
+      if (!muni || !muni.active) {
+        return NextResponse.json(
+          { error: 'Municipalidad no disponible. Verifica el enlace o contacta al municipio.' },
+          { status: 400 }
+        )
+      }
+      municipalityId = muni.id
+      municipalityName = muni.name
+    } else if (data.region && data.commune) {
       const matching = await prisma.municipality.findMany({
         where: { region: data.region, commune: data.commune, active: true },
         select: { id: true, name: true },
