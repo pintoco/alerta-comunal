@@ -65,6 +65,12 @@ export default async function Home() {
           >
             Consultar reporte
           </Link>
+          <Link
+            href="/mapa-publico"
+            className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white font-semibold rounded-lg transition-colors text-sm"
+          >
+            Ver mapa público
+          </Link>
         </div>
 
         {/* Demo quick-login — solo visible si NEXT_PUBLIC_DEMO_MODE=true */}

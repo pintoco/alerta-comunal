@@ -1,9 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { EMERGENCY_TYPE_LABELS, STATUS_LABELS } from '@/lib/utils'
 import type { Emergency } from '@/types'
+
+interface MunicipalityOption {
+  slug: string
+  name: string
+}
 
 const MapWrapper = dynamic(() => import('@/components/map/MapWrapper'), {
   ssr: false,
@@ -20,13 +26,17 @@ const MapWrapper = dynamic(() => import('@/components/map/MapWrapper'), {
 interface MapaPublicoViewProps {
   /** Cuando viene desde /mapa-publico/[slug]: filtra solo esa municipalidad. */
   municipalitySlug?: string
+  /** Slug que representa la vista por defecto (PUBLIC_DEFAULT_MUNICIPALITY_SLUG), solo para preseleccionar el desplegable. */
+  defaultSlug?: string
 }
 
-export default function MapaPublicoView({ municipalitySlug }: MapaPublicoViewProps) {
+export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaPublicoViewProps) {
+  const router = useRouter()
   const [emergencies, setEmergencies] = useState<Emergency[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [municipalities, setMunicipalities] = useState<MunicipalityOption[]>([])
 
   useEffect(() => {
     const url = municipalitySlug
@@ -48,6 +58,19 @@ export default function MapaPublicoView({ municipalitySlug }: MapaPublicoViewPro
         setLoading(false)
       })
   }, [municipalitySlug])
+
+  useEffect(() => {
+    fetch('/api/municipios-publicos')
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setMunicipalities)
+      .catch(() => setMunicipalities([]))
+  }, [])
+
+  const selectedSlug = municipalitySlug ?? defaultSlug ?? ''
+
+  const handleMunicipalityChange = (slug: string) => {
+    router.push(slug ? `/mapa-publico/${slug}` : '/mapa-publico')
+  }
 
   const reportarHref = municipalitySlug ? `/reportar/${municipalitySlug}` : '/reportar'
 
@@ -93,11 +116,29 @@ export default function MapaPublicoView({ municipalitySlug }: MapaPublicoViewPro
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Emergencias activas</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Mapa en tiempo real de situaciones comunales con atención activa.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Emergencias activas</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              Mapa en tiempo real de situaciones comunales con atención activa.
+            </p>
+          </div>
+          {municipalities.length > 0 && (
+            <div className="sm:w-64">
+              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Municipalidad
+              </label>
+              <select
+                className="form-input mt-1"
+                value={selectedSlug}
+                onChange={(e) => handleMunicipalityChange(e.target.value)}
+              >
+                {municipalities.map((m) => (
+                  <option key={m.slug} value={m.slug}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {!loading && !error && (
