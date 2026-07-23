@@ -37,7 +37,51 @@ function configureMaps() {
   mapsConfigured = true
 }
 
-async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+let geocoderInstance: google.maps.Geocoder | null = null
+
+async function getGeocoder(): Promise<google.maps.Geocoder | null> {
+  if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) return null
+  if (geocoderInstance) return geocoderInstance
+  try {
+    configureMaps()
+    const { Geocoder } = (await importLibrary('geocoding')) as google.maps.GeocodingLibrary
+    geocoderInstance = new Geocoder()
+    return geocoderInstance
+  } catch {
+    return null
+  }
+}
+
+function formatGoogleResult(result: google.maps.GeocoderResult): string {
+  const comps = result.address_components
+  const get = (type: string) => comps.find((c) => c.types.includes(type))?.long_name
+  const route = get('route')
+  const streetNumber = get('street_number')
+  const neighbourhood = get('neighborhood') || get('sublocality') || get('sublocality_level_1')
+  const city = get('locality') || get('administrative_area_level_3')
+  const parts = [
+    route ? `${route}${streetNumber ? ' ' + streetNumber : ''}` : null,
+    neighbourhood,
+    city,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : result.formatted_address
+}
+
+async function reverseGeocodeGoogle(lat: number, lng: number): Promise<string | null> {
+  const geocoder = await getGeocoder()
+  if (!geocoder) return null
+  return new Promise((resolve) => {
+    geocoder.geocode({ location: { lat, lng }, language: 'es', region: 'CL' }, (results, status) => {
+      if (status === 'OK' && results && results[0]) {
+        resolve(formatGoogleResult(results[0]))
+      } else {
+        resolve(null)
+      }
+    })
+  })
+}
+
+async function reverseGeocodeNominatim(lat: number, lng: number): Promise<string | null> {
   const res = await fetch(
     `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
     { headers: { 'User-Agent': 'AlertaComunal/1.0' } },
@@ -53,6 +97,19 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
   return parts.length > 0
     ? parts.join(', ')
     : (data.display_name as string).split(',').slice(0, 3).join(',')
+}
+
+// Google tiene mucha mejor cobertura de direcciones en Chile que OSM/Nominatim
+// (Nominatim "adivina" con el punto indexado más cercano, a veces a varias cuadras).
+// Nominatim queda solo como respaldo si Google falla o no hay API key configurada.
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  const google = await reverseGeocodeGoogle(lat, lng)
+  if (google) return google
+  try {
+    return await reverseGeocodeNominatim(lat, lng)
+  } catch {
+    return null
+  }
 }
 
 export default function LocationPicker({
