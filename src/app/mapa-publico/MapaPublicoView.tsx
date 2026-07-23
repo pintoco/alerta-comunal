@@ -72,6 +72,17 @@ export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaP
     router.push(slug ? `/mapa-publico/${slug}` : '/mapa-publico')
   }
 
+  // Centra el mapa en el centroide de las emergencias de la municipalidad elegida
+  // (no tenemos lat/lng propia por municipalidad, pero sus reportes ya viven en esa comuna).
+  const withCoords = emergencies.filter((e) => e.latitude != null && e.longitude != null)
+  const mapCenter: [number, number] | undefined =
+    withCoords.length > 0
+      ? [
+          withCoords.reduce((sum, e) => sum + e.latitude!, 0) / withCoords.length,
+          withCoords.reduce((sum, e) => sum + e.longitude!, 0) / withCoords.length,
+        ]
+      : undefined
+
   const reportarHref = municipalitySlug ? `/reportar/${municipalitySlug}` : '/reportar'
 
   const activas = emergencies.filter((e) => e.status === 'NUEVA' || e.status === 'EN_ATENCION')
@@ -200,6 +211,8 @@ export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaP
           <MapWrapper
             emergencies={emergencies as unknown as Emergency[]}
             height="520px"
+            center={mapCenter}
+            zoom={mapCenter ? 13 : undefined}
           />
         )}
 

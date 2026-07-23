@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Link from 'next/link'
@@ -49,6 +49,17 @@ interface EmergencyMapProps {
   zoom?: number
 }
 
+// react-leaflet solo usa center/zoom de MapContainer en el montaje inicial.
+// Este helper reposiciona el mapa cuando cambian después (ej. al elegir otra municipalidad).
+function MapRecenter({ center, zoom }: { center: [number, number]; zoom: number }) {
+  const map = useMap()
+  useEffect(() => {
+    map.setView(center, zoom)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center[0], center[1], zoom])
+  return null
+}
+
 export default function EmergencyMap({
   emergencies,
   height = '500px',
@@ -74,6 +85,7 @@ export default function EmergencyMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <MapRecenter center={center} zoom={zoom} />
         {withCoords.map((emergency) => (
           <Marker
             key={emergency.id}
