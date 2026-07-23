@@ -1,17 +1,14 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { randomUUID } from 'crypto'
 
-const REQUIRED_VARS = [
-  'S3_ENDPOINT',
-  'S3_BUCKET',
-  'S3_ACCESS_KEY_ID',
-  'S3_SECRET_ACCESS_KEY',
-  'S3_PUBLIC_URL',
-] as const
+// S3_ENDPOINT y las credenciales estáticas solo son obligatorias para MinIO.
+// En AWS real, sin S3_ACCESS_KEY_ID/SECRET el SDK usa el rol IAM de la instancia
+// (default credential provider chain) y sin S3_ENDPOINT apunta al S3 nativo.
+const REQUIRED_VARS = ['S3_BUCKET', 'S3_PUBLIC_URL'] as const
 
 const CONFIG_ERROR =
-  'Storage S3/MinIO no configurado correctamente. Revisa S3_ENDPOINT, S3_BUCKET, ' +
-  'S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY y S3_PUBLIC_URL.'
+  'Storage S3 no configurado correctamente. Revisa S3_BUCKET y S3_PUBLIC_URL ' +
+  '(y, si usas MinIO, también S3_ENDPOINT, S3_ACCESS_KEY_ID y S3_SECRET_ACCESS_KEY).'
 
 function validateConfig(): void {
   const missing = REQUIRED_VARS.filter((v) => !process.env[v])
@@ -19,14 +16,20 @@ function validateConfig(): void {
 }
 
 function createClient(): S3Client {
+  const hasStaticCredentials = !!process.env.S3_ACCESS_KEY_ID && !!process.env.S3_SECRET_ACCESS_KEY
+
   return new S3Client({
     region: process.env.S3_REGION || 'us-east-1',
-    endpoint: process.env.S3_ENDPOINT,
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
-    },
+    ...(process.env.S3_ENDPOINT ? { endpoint: process.env.S3_ENDPOINT } : {}),
+    ...(process.env.S3_FORCE_PATH_STYLE === 'true' ? { forcePathStyle: true } : {}),
+    ...(hasStaticCredentials
+      ? {
+          credentials: {
+            accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+            secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+          },
+        }
+      : {}),
   })
 }
 

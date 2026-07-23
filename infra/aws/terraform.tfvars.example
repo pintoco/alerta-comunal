@@ -1,0 +1,42 @@
+# Copia este archivo a terraform.tfvars y completa los valores.
+# terraform.tfvars NO debe subirse a git (agrégalo a .gitignore si no está).
+
+aws_region  = "us-east-1"
+environment = "prod"
+
+azs = ["us-east-1a", "us-east-1b"]
+
+# Repo a desplegar en cada instancia EC2. Si es privado, usa una URL con
+# token de acceso embebido, ej: https://<token>@github.com/usuario/alertacomunal.git
+app_repo_url    = "https://github.com/tu-usuario/alertacomunal.git"
+app_repo_branch = "main"
+
+# ARN de un certificado ACM YA VALIDADO en la misma región (aws_region).
+# Créalo antes con: aws acm request-certificate --domain-name tudominio.cl --validation-method DNS
+certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Opcional: si quieres que Terraform cree el registro DNS.
+# domain_name    = "app.tudominio.cl"
+# hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+
+# Tu IP pública /32 para poder entrar por SSH además de SSM Session Manager.
+# admin_cidr = "203.0.113.10/32"
+# ssh_key_name = "mi-keypair"
+
+alerts_email = "tecnico@elementalpro.cl"
+
+# Opcionales — déjalos vacíos si no usas esas integraciones todavía.
+resend_api_key       = ""
+email_enabled        = false
+google_maps_api_key  = ""
+
+public_default_municipality_slug = "demo"
+
+# Ajusta según presupuesto/carga esperada.
+instance_type        = "t3.small"
+asg_min_size          = 2
+asg_max_size          = 6
+asg_desired_capacity  = 2
+db_instance_class     = "db.t4g.micro"
+db_multi_az           = false
+redis_node_type       = "cache.t3.micro"
