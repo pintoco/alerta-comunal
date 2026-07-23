@@ -17,6 +17,7 @@ import StatusBadge from '@/components/emergencies/StatusBadge'
 import PriorityBadge from '@/components/emergencies/PriorityBadge'
 import TaskList from '@/components/emergencies/TaskList'
 import EvidenceGallery from '@/components/emergencies/EvidenceGallery'
+import EmergencyDeleteButton from '@/components/emergencies/EmergencyDeleteButton'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import Loading from '@/components/ui/Loading'
@@ -91,6 +92,7 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
   }
 
   const canEdit = session?.role === 'ADMIN' || session?.role === 'OPERADOR'
+  const canDelete = session?.role === 'SUPER_ADMIN' || session?.role === 'ADMIN'
   const activityLogs = (emergency as any).activityLogs as ActivityLog[] || []
   const evidences = emergency.evidences || []
   const tasks = emergency.tasks || []
@@ -130,6 +132,7 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
                 </Link>
               </>
             )}
+            {canDelete && <EmergencyDeleteButton id={id} />}
           </div>
         </div>
 
