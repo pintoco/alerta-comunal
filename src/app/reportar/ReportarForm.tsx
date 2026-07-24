@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import Script from 'next/script'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { publicReportSchema, PublicReportFormData } from '@/lib/validations/emergency'
@@ -8,6 +9,17 @@ import { EMERGENCY_TYPE_LABELS, EMERGENCY_TYPES } from '@/lib/utils'
 import Button from '@/components/ui/Button'
 import LocationPicker, { type Coords } from '@/components/emergencies/LocationPicker'
 import { CHILE_REGIONS_COMMUNES } from '@/data/chile-regions-communes'
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ''
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: HTMLElement, opts: { sitekey: string; callback: (token: string) => void }) => string
+      reset: (widgetId?: string) => void
+    }
+  }
+}
 
 /** Convierte un slug ("tierra-amarilla") en un nombre legible ("Tierra Amarilla"). */
 function slugToLabel(slug: string): string {
@@ -24,7 +36,7 @@ interface ReportarFormProps {
 
 export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
   const [submitted, setSubmitted] = useState(false)
-  const [reportCode, setReportCode] = useState('')
+  const [reportToken, setReportToken] = useState('')
   const [error, setError] = useState('')
 
   const [coords, setCoords] = useState<Coords | null>(null)
@@ -34,6 +46,21 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
   const photoRef = useRef<HTMLInputElement>(null)
   const [photoName, setPhotoName] = useState('')
   const [photoError, setPhotoError] = useState('')
+
+  // CAPTCHA adaptativo: oculto por defecto, solo aparece si el servidor lo exige
+  // (patrón de envíos repetidos desde la misma IP en poco tiempo).
+  const [showCaptcha, setShowCaptcha] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const captchaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (showCaptcha && captchaRef.current && window.turnstile) {
+      window.turnstile.render(captchaRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token) => setCaptchaToken(token),
+      })
+    }
+  }, [showCaptcha])
 
   const {
     register,
@@ -76,6 +103,12 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
 
   const onSubmit = async (data: PublicReportFormData) => {
     setError('')
+
+    if (showCaptcha && !captchaToken) {
+      setError('Completa la verificación de seguridad antes de enviar.')
+      return
+    }
+
     try {
       const formData = new FormData()
       formData.append('reporterName', data.reporterName)
@@ -83,6 +116,7 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
       formData.append('type', data.type)
       formData.append('description', data.description)
       formData.append('address', data.address)
+      formData.append('dataConsent', String(data.dataConsent === true))
       if (data.sector) formData.append('sector', data.sector)
       if (municipalitySlug) {
         formData.append('municipalitySlug', municipalitySlug)
@@ -94,6 +128,7 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
         formData.append('latitude', String(coords.lat))
         formData.append('longitude', String(coords.lng))
       }
+      if (captchaToken) formData.append('turnstileToken', captchaToken)
       const photoFile = photoRef.current?.files?.[0]
       if (photoFile) formData.append('photo', photoFile)
 
@@ -104,11 +139,16 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
 
       if (!res.ok) {
         const json = await res.json()
+        if (json.error === 'CAPTCHA_REQUIRED') {
+          setShowCaptcha(true)
+          setError('Por seguridad, completa la verificación abajo y vuelve a enviar el reporte.')
+          return
+        }
         throw new Error(json.error || 'Error al enviar el reporte')
       }
 
       const json = await res.json()
-      setReportCode(json.code)
+      setReportToken(json.token)
       setSubmitted(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al enviar el reporte')
@@ -134,7 +174,7 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
             </p>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">Código de seguimiento</p>
-              <p className="text-2xl font-bold font-mono text-blue-900 mt-1">{reportCode}</p>
+              <p className="text-2xl font-bold font-mono text-blue-900 mt-1 break-all">{reportToken}</p>
               <p className="text-xs text-blue-500 mt-1">Guarde este código para consultar el estado</p>
             </div>
             <a
@@ -144,7 +184,7 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
               Consultar estado de mi reporte →
             </a>
             <button
-              onClick={() => { setSubmitted(false); setReportCode(''); setCoords(null); setCurrentAddress(''); setPhotoName('') }}
+              onClick={() => { setSubmitted(false); setReportToken(''); setCoords(null); setCurrentAddress(''); setPhotoName(''); setShowCaptcha(false); setCaptchaToken('') }}
               className="text-sm text-gray-500 hover:underline"
             >
               Enviar otro reporte
@@ -157,6 +197,9 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {TURNSTILE_SITE_KEY && (
+        <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="lazyOnload" />
+      )}
       <header className="bg-slate-900 px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -327,6 +370,24 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
             <strong>Importante:</strong> Para situaciones de riesgo inmediato llame al 133 (Carabineros), 132 (Bomberos) o 131 (SAMU).
           </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <label className="flex items-start gap-3 text-sm text-gray-700">
+              <input type="checkbox" {...register('dataConsent')} className="mt-0.5" />
+              <span>
+                Acepto que mis datos de contacto sean tratados por la municipalidad únicamente
+                para gestionar este reporte.
+              </span>
+            </label>
+            {errors.dataConsent && <p className="form-error mt-1">{errors.dataConsent.message}</p>}
+          </div>
+
+          {showCaptcha && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <p className="text-sm text-gray-600 mb-3">Verificación de seguridad</p>
+              <div ref={captchaRef} />
+            </div>
+          )}
 
           <Button
             type="submit"

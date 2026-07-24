@@ -35,14 +35,14 @@ const PRIORITY_COLORS: Record<Priority, string> = {
 }
 
 export default function ConsultaPage() {
-  const [code, setCode] = useState('')
+  const [token, setToken] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PublicEmergency | null>(null)
   const [error, setError] = useState('')
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    const trimmed = code.trim().toUpperCase()
+    const trimmed = token.trim()
     if (!trimmed) return
 
     setLoading(true)
@@ -50,7 +50,7 @@ export default function ConsultaPage() {
     setResult(null)
 
     try {
-      const res = await fetch(`/api/reporte-publico?code=${encodeURIComponent(trimmed)}`)
+      const res = await fetch(`/api/reporte-publico?token=${encodeURIComponent(trimmed)}`)
       const json = await res.json()
 
       if (!res.ok) {
@@ -99,15 +99,15 @@ export default function ConsultaPage() {
           <form onSubmit={handleSearch} className="flex gap-3">
             <input
               type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="EMG-2026-0001"
-              className="form-input flex-1 font-mono uppercase placeholder:normal-case placeholder:font-sans"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Código de seguimiento"
+              className="form-input flex-1 font-mono placeholder:normal-case placeholder:font-sans"
               autoFocus
             />
             <button
               type="submit"
-              disabled={loading || !code.trim()}
+              disabled={loading || !token.trim()}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? (

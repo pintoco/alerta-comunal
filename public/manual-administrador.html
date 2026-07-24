@@ -315,6 +315,7 @@
       <li><a href="#webhook">Webhook</a></li>
       <li><a href="#auditoria">Auditoría</a></li>
       <li><a href="#enlaces">Enlaces públicos</a></li>
+      <li><a href="#privacidad">Privacidad y retención de datos</a></li>
       <li><a href="#practicas">Buenas prácticas</a></li>
     </ol>
   </nav>
@@ -609,8 +610,20 @@ app.listen(3001)</code></pre>
       </ul>
     </section>
 
+    <section class="sec" id="privacidad">
+      <h2>12. Privacidad y retención de datos</h2>
+      <ul>
+        <li><strong>Token de consulta</strong>: al enviar un reporte, el ciudadano recibe un <em>token de seguimiento</em> aleatorio (no el código interno <span class="chip">EMG-2026-0001</span>) para usar en <span class="route">/consulta</span>. El código interno sigue apareciendo en tus correos, exportaciones y webhooks, pero nunca se lo entregues a un ciudadano como si fuera su código de seguimiento — no sirve para consultar por esa vía.</li>
+        <li><strong>Nota de cierre visible al público</strong>: lo que escribas en las observaciones al resolver o cerrar una emergencia (<span class="fname">Cambiar estado</span>, sección 4.3) se muestra tal cual en <span class="route">/consulta</span> a quien tenga el token. No incluyas ahí comentarios internos, nombres de terceros ni evaluaciones que no correspondan compartir públicamente.</li>
+        <li><strong>Datos del reportante ocultos para Visualizador</strong>: el rol Visualizador nunca ve el nombre ni el teléfono del reportante — ni en el listado, ni en el detalle, ni en el reporte imprimible. Cuando Admin/Operador/Super Admin sí los consultan, queda un registro en Auditoría (<span class="chip">EMERGENCY_PII_VIEWED</span>).</li>
+        <li><strong>Consentimiento</strong>: el formulario ciudadano exige aceptar el tratamiento de sus datos de contacto antes de enviar el reporte.</li>
+        <li><strong>CAPTCHA adaptativo</strong>: si un mismo origen envía varios reportes en pocos minutos, el formulario exige una verificación de seguridad antes de aceptar el envío. La gran mayoría de los ciudadanos, que envían un solo reporte, nunca la ven.</li>
+        <li><strong>Retención</strong>: el nombre y teléfono del reportante deberían anonimizarse 24 meses después del cierre de la emergencia. Esta limpieza automática todavía no está implementada — es un pendiente técnico, no algo que debas hacer manualmente hoy.</li>
+      </ul>
+    </section>
+
     <section class="sec" id="practicas">
-      <h2>12. Buenas prácticas</h2>
+      <h2>13. Buenas prácticas</h2>
       <ul>
         <li>No compartas tu contraseña ni dejes tu sesión abierta en equipos compartidos.</li>
         <li>Al desvincular a alguien de la institución, <strong>desactiva</strong> su usuario; reserva la eliminación (Super Admin) para casos excepcionales.</li>

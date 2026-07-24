@@ -145,7 +145,7 @@ Con los valores por defecto (2× `t3.small`, `db.t4g.micro` sin Multi-AZ, `cache
 | `/reportar/[slug]` | No | Fija la municipalidad indicada por `slug`; oculta región/comuna |
 | `/mapa-publico` | No | Desplegable con todas las municipalidades activas (`/api/municipios-publicos`); al elegir una, navega a su slug y el mapa se recentra en el centroide de sus emergencias |
 | `/mapa-publico/[slug]` | No | Mapa filtrado y centrado en esa municipalidad |
-| `/consulta` | No | Búsqueda de una emergencia propia por código, sin datos de otras |
+| `/consulta` | No | Búsqueda de un reporte propio por **token de seguimiento** (aleatorio, no el código interno `EMG-YYYY-XXXX`), sin datos de otros reportes |
 | `/api/municipios-publicos` | No | Lista `{ slug, name }` de municipalidades con `active: true`, rate-limited |
 
 ## Manuales de uso
@@ -331,6 +331,7 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `EMAIL_FROM` | Remitente de los correos automáticos (dominio verificado en Resend). Default: `tecnico@elementalpro.cl`. | `notificaciones@midominio.cl` |
 | `EMAIL_ENABLED` | Activa el envío de correos. | `true` / `false` |
 | `REDIS_URL` | Conexión Redis para rate limiting distribuido. Opcional — sin ella cae a memoria in-process. | `redis://user:pass@host:6379` |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile para el CAPTCHA adaptativo de `/reportar`. Opcionales — sin ambas, el CAPTCHA nunca se exige. | Crear sitio en el dashboard de Cloudflare |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_PUBLIC_URL` | Requeridas solo si `STORAGE_PROVIDER=s3`. En AWS, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` pueden omitirse: la instancia EC2 usa su IAM role automáticamente. | Ver sección Almacenamiento |
 | `NEXT_PUBLIC_DEMO_MODE` | `true` muestra el panel QuickLogin en la página principal. **No usar en producción real.** | `true` / `false` |
 
@@ -613,6 +614,14 @@ app.listen(3001)
 
 Pasos: desplegar este servidor en cualquier lado accesible por `https://` → crear un [Incoming Webhook de Slack](https://api.slack.com/messaging/webhooks) gratis → pegar la URL del servidor en `/admin/municipalidades/[id]/webhook` y copiar el secreto generado a `ALERTACOMUNAL_WEBHOOK_SECRET` → probar con el botón "Enviar prueba". La verificación de firma no es opcional: sin ella, cualquiera que adivine la URL podría enviar "emergencias" falsas.
 
+## Privacidad y retención de datos
+
+- **Consentimiento**: `/reportar` exige aceptar un checkbox de tratamiento de datos antes de enviar; se guarda `consentAcceptedAt` en la emergencia.
+- **PII de reportante** (`reporterName`/`reporterPhone`): oculta para el rol `VISUALIZADOR` en listado, detalle y reporte imprimible — no solo en el export CSV. El acceso de roles que sí la ven (`SUPER_ADMIN`/`ADMIN`/`OPERADOR`) queda registrado en `AuditLog` como `EMERGENCY_PII_VIEWED`.
+- **Token de consulta ciudadana**: `/consulta` usa un token aleatorio (`publicToken`) generado al crear el reporte, distinto del código `EMG-YYYY-XXXX` (secuencial y por tanto enumerable). El código sigue usándose internamente (staff, correos, webhooks); el token es lo único que se le entrega al ciudadano.
+- **CAPTCHA adaptativo**: `/reportar` no muestra ningún CAPTCHA por defecto. A partir del segundo envío desde la misma IP en 15 minutos, exige resolver un [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/) antes de aceptar el reporte (requiere `NEXT_PUBLIC_TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY`; sin ellas, se omite).
+- **Retención** (política, automatización pendiente): los datos del reportante (`reporterName`/`reporterPhone`) deberían anonimizarse 24 meses después de `closedAt`. Hoy no hay ningún job que lo haga — la anonimización automática requiere infraestructura de cron (no existe aún en el proyecto, ver Roadmap) y queda pendiente de implementar.
+
 ## Roadmap
 
 ### Completado
@@ -641,11 +650,20 @@ Pasos: desplegar este servidor en cualquier lado accesible por `https://` → cr
 - [x] **Healthcheck dedicado** (`/api/health`) como target del ALB
 - [x] **WAF ajustado** para no bloquear reportes ciudadanos con foto (`SizeRestrictions_BODY`)
 - [x] **Webhooks configurables por municipalidad** — notificaciones HTTP firmadas (HMAC-SHA256) a sistemas externos
+- [x] **Sesiones frescas**: rol/municipalidad se revalidan en cada request contra la DB, invalidadas al cambiar contraseña o rol (`sessionVersion`)
+- [x] **Fail-fast de configuración**: el proceso no arranca en producción sin `JWT_SECRET`
+- [x] **Seed seguro por defecto**: seed de producción y seed de demostración (`SEED_DEMO=true`) separados
+- [x] **Token de consulta ciudadana aleatorio** — `/consulta` usa un token no enumerable, independiente del código `EMG-YYYY-XXXX` (secuencial, de uso interno)
+- [x] **Consentimiento de tratamiento de datos** explícito en `/reportar`
+- [x] **PII de reportante oculta para VISUALIZADOR** en listado, detalle y reporte imprimible (antes solo aplicaba al export CSV)
+- [x] **Registro de accesos a datos sensibles** (`EMERGENCY_PII_VIEWED` en `/admin/auditoria`)
+- [x] **CAPTCHA adaptativo** (Cloudflare Turnstile) en `/reportar` ante envíos repetidos desde la misma IP
 
 ### Corto plazo (próximos sprints)
 
 - [ ] Rotar la access key AWS usada durante el setup inicial de Terraform
 - [ ] Retirar el acceso SSH/EC2 Instance Connect de depuración una vez terminadas las pruebas en producción
+- [ ] Automatizar la política de retención de datos del reportante (job de anonimización + cron en EC2/Terraform — ver sección "Retención de datos")
 
 ### Largo plazo
 

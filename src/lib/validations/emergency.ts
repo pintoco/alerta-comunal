@@ -75,6 +75,10 @@ export const publicReportSchema = z
     commune: z.string().max(100).optional().nullable().transform((v) => v || null),
     latitude: latitudeSchema,
     longitude: longitudeSchema,
+    dataConsent: z.literal(true, {
+      errorMap: () => ({ message: 'Debes aceptar el tratamiento de datos para continuar.' }),
+    }),
+    turnstileToken: z.string().optional(),
   })
   .refine((data) => !data.commune || !!data.region, {
     message: 'Debe seleccionar una región antes de seleccionar una comuna.',

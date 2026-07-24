@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { generateEmergencyCode } from '@/lib/generate-code'
+import { generateEmergencyCode, generatePublicToken } from '@/lib/generate-code'
 import { Prisma } from '@prisma/client'
 import { publicReportSchema } from '@/lib/validations/emergency'
-import { municipalityConfig, isProduction } from '@/lib/config'
+import { municipalityConfig, isProduction, turnstileConfig } from '@/lib/config'
 import { validateFile, saveUpload } from '@/lib/storage'
 import {
   sendMunicipalityNewReportEmail,
@@ -12,8 +12,25 @@ import {
 import { sendWebhook } from '@/lib/webhooks'
 import { checkRateLimit, getClientIpFromRequest } from '@/lib/rate-limit'
 
-// ─── GET /api/reporte-publico?code=EMG-XXXX-XXXX ─────────────────────────────
-// Consulta pública de estado por código. No expone datos internos sensibles.
+async function verifyTurnstileToken(token: string, ip: string): Promise<boolean> {
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret: turnstileConfig.secretKey, response: token, remoteip: ip }),
+      signal: AbortSignal.timeout(5000),
+    })
+    const data = await res.json()
+    return data.success === true
+  } catch (err) {
+    console.error('[reporte-publico] Error al verificar Turnstile:', err)
+    return false
+  }
+}
+
+// ─── GET /api/reporte-publico?token=... ──────────────────────────────────────
+// Consulta pública de estado por token de seguimiento (no por el `code` interno,
+// que es secuencial y por tanto enumerable). No expone datos internos sensibles.
 export async function GET(request: Request) {
   const ip = getClientIpFromRequest(request)
   const rateLimit = await checkRateLimit(`public-report-get:${ip}`, 30, 10 * 60 * 1000)
@@ -28,17 +45,16 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url)
-  const code = searchParams.get('code')?.trim().toUpperCase()
+  const token = searchParams.get('token')?.trim()
 
-  if (!code) {
-    return NextResponse.json({ error: 'Se requiere el parámetro code' }, { status: 400 })
+  if (!token) {
+    return NextResponse.json({ error: 'Se requiere el parámetro token' }, { status: 400 })
   }
 
   const emergency = await prisma.emergency.findUnique({
-    where: { code },
+    where: { publicToken: token },
     select: {
       code: true,
-      title: true,
       type: true,
       status: true,
       priority: true,
@@ -54,7 +70,7 @@ export async function GET(request: Request) {
 
   if (!emergency) {
     return NextResponse.json(
-      { error: 'No se encontró una emergencia con ese código.' },
+      { error: 'No se encontró un reporte con ese código de seguimiento.' },
       { status: 404 }
     )
   }
@@ -82,6 +98,27 @@ export async function POST(request: Request) {
 
     const rawLatitude = formData.get('latitude')
     const rawLongitude = formData.get('longitude')
+    const turnstileToken = (formData.get('turnstileToken') as string) || undefined
+
+    // CAPTCHA adaptativo: la mayoría de los ciudadanos (un solo reporte) nunca lo ven.
+    // Solo se exige a partir del 2do envío desde la misma IP en 15 minutos — señal
+    // barata de patrón sospechoso, reutilizando checkRateLimit con un umbral propio
+    // sin tocar el rate limit real (5/15min) que sigue aplicando igual.
+    if (turnstileConfig.enabled) {
+      const suspicion = await checkRateLimit(`public-report-suspect:${ip}`, 1, 15 * 60 * 1000)
+      if (!suspicion.allowed) {
+        if (!turnstileToken) {
+          return NextResponse.json({ error: 'CAPTCHA_REQUIRED' }, { status: 428 })
+        }
+        const validCaptcha = await verifyTurnstileToken(turnstileToken, ip)
+        if (!validCaptcha) {
+          return NextResponse.json(
+            { error: 'Verificación de seguridad fallida. Intenta nuevamente.' },
+            { status: 400 }
+          )
+        }
+      }
+    }
 
     const body = {
       reporterName: formData.get('reporterName') as string,
@@ -96,6 +133,7 @@ export async function POST(request: Request) {
         rawLatitude && rawLatitude !== '' ? parseFloat(rawLatitude as string) : null,
       longitude:
         rawLongitude && rawLongitude !== '' ? parseFloat(rawLongitude as string) : null,
+      dataConsent: formData.get('dataConsent') === 'true',
     }
 
     const result = publicReportSchema.safeParse(body)
@@ -195,18 +233,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── Crear emergencia con retry ante colisión de código ────────────────────
+    // ── Crear emergencia con retry ante colisión de código o token ────────────
     const code = await generateEmergencyCode()
+    const publicToken = generatePublicToken()
     const MAX_ATTEMPTS = 3
     let emergency: Awaited<ReturnType<typeof prisma.emergency.create>> | null = null
     let lastError: unknown
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const attemptCode = attempt === 0 ? code : await generateEmergencyCode()
+      const attemptToken = attempt === 0 ? publicToken : generatePublicToken()
       try {
         emergency = await prisma.emergency.create({
           data: {
             code: attemptCode,
+            publicToken: attemptToken,
             title: `Reporte ciudadano: ${data.type}`,
             description: data.description,
             type: data.type,
@@ -220,6 +261,7 @@ export async function POST(request: Request) {
             longitude: data.longitude || null,
             reporterName: data.reporterName,
             reporterPhone: data.reporterPhone,
+            consentAcceptedAt: new Date(),
             origin: 'CIUDADANO',
             municipalityId,
           },
@@ -229,7 +271,8 @@ export async function POST(request: Request) {
         if (
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002' &&
-          (err.meta?.target as string[] | undefined)?.includes('code')
+          ((err.meta?.target as string[] | undefined)?.includes('code') ||
+            (err.meta?.target as string[] | undefined)?.includes('publicToken'))
         ) {
           lastError = err
           continue
@@ -239,16 +282,17 @@ export async function POST(request: Request) {
     }
 
     if (!emergency) {
-      console.error('[reporte-publico] No se pudo generar código único', lastError)
+      console.error('[reporte-publico] No se pudo generar código/token único', lastError)
       return NextResponse.json({ error: 'Error al procesar el reporte' }, { status: 500 })
     }
 
-    // ActivityLog: creación
+    // ActivityLog: creación — sin nombre/teléfono en el texto libre (quedan solo
+    // en las columnas reporterName/reporterPhone, controladas por rol).
     await prisma.activityLog.create({
       data: {
         emergencyId: emergency.id,
         action: 'CREATED',
-        description: `Reporte ciudadano recibido de ${data.reporterName} (${data.reporterPhone})`,
+        description: 'Reporte ciudadano recibido.',
       },
     })
 
@@ -390,7 +434,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ code: emergency.code, id: emergency.id }, { status: 201 })
+    return NextResponse.json({ token: emergency.publicToken, id: emergency.id }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Error al procesar el reporte' }, { status: 500 })
   }

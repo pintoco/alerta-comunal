@@ -116,6 +116,10 @@ model Emergency {
   longitude      Float?
   reporterName   String?
   reporterPhone  String?
+  // Token aleatorio para /consulta (distinto del `code`, que es secuencial y
+  // por tanto enumerable — nunca debe usarse como credencial de acceso público).
+  publicToken       String    @unique
+  consentAcceptedAt DateTime?
   origin         ReportOrigin    @default(INTERNO)
   assignedToId   String?
   assignedTo     User?           @relation("AssignedTo", fields: [assignedToId], references: [id])

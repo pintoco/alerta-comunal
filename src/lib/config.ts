@@ -52,3 +52,14 @@ export const emailConfig = {
   apiKey: process.env.RESEND_API_KEY || '',
   from: process.env.EMAIL_FROM || EMAIL_FROM_DEFAULT,
 }
+
+// CAPTCHA adaptativo en /reportar (Cloudflare Turnstile). Opcional — sin ambas
+// keys configuradas, el chequeo de CAPTCHA se omite por completo (igual que
+// Google Maps cuando falta NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).
+export const turnstileConfig = {
+  siteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '',
+  secretKey: process.env.TURNSTILE_SECRET_KEY || '',
+  get enabled() {
+    return !!(this.siteKey && this.secretKey)
+  },
+}

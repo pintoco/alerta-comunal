@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { notFound, redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
 import { canAccessEmergency } from '@/lib/tenant'
+import { redactPII } from '@/lib/pii'
 import {
   EMERGENCY_TYPE_LABELS,
   PRIORITY_LABELS,
@@ -45,6 +46,8 @@ export default async function ReportePage({
   if (!canAccessEmergency(session, emergency.municipalityId)) {
     redirect('/emergencias')
   }
+
+  const redactedEmergency = redactPII(emergency, session)
 
   const municipalityLabel = emergency.municipality?.name
     ? [emergency.municipality.name, emergency.municipality.commune, emergency.municipality.region]
@@ -183,14 +186,14 @@ export default async function ReportePage({
         </div>
 
         {/* Datos del reportante */}
-        {(emergency.reporterName || emergency.reporterPhone) && (
+        {(redactedEmergency.reporterName || redactedEmergency.reporterPhone) && (
           <div className="mb-8">
             <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-3 border-b border-gray-200 pb-1">
               Datos del reportante
             </h3>
             <div className="flex gap-8 text-sm">
-              {emergency.reporterName && <div><span className="text-gray-500">Nombre: </span>{emergency.reporterName}</div>}
-              {emergency.reporterPhone && <div><span className="text-gray-500">Teléfono: </span>{emergency.reporterPhone}</div>}
+              {redactedEmergency.reporterName && <div><span className="text-gray-500">Nombre: </span>{redactedEmergency.reporterName}</div>}
+              {redactedEmergency.reporterPhone && <div><span className="text-gray-500">Teléfono: </span>{redactedEmergency.reporterPhone}</div>}
             </div>
           </div>
         )}

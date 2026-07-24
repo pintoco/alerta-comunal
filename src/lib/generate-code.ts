@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto'
 import { prisma } from './prisma'
 
 /**
@@ -18,4 +19,13 @@ export async function generateEmergencyCode(): Promise<string> {
     where: { code: { startsWith: `EMG-${year}-` } },
   })
   return `EMG-${year}-${String(count + 1).padStart(4, '0')}`
+}
+
+/**
+ * Token aleatorio usado exclusivamente por /consulta (búsqueda pública de estado).
+ * A diferencia de `code` (secuencial, por tanto enumerable), este token no revela
+ * ninguna información sobre cuántas emergencias existen ni permite adivinarlo.
+ */
+export function generatePublicToken(): string {
+  return randomBytes(18).toString('base64url')
 }

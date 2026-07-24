@@ -8,6 +8,7 @@ import { getMunicipalityFilter, requireMunicipalityAssigned } from '@/lib/tenant
 import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
 import { sendWebhook } from '@/lib/webhooks'
 import { writeAuditLog } from '@/lib/audit'
+import { redactPII } from '@/lib/pii'
 
 export async function GET(request: Request) {
   const session = await requireAuth()
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
   ])
 
   return NextResponse.json({
-    data: emergencies,
+    data: emergencies.map((e) => redactPII(e, session)),
     total,
     page,
     limit,

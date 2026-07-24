@@ -7,6 +7,7 @@ import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
 import { sendWebhook } from '@/lib/webhooks'
 import { deleteUpload } from '@/lib/storage'
 import { writeAuditLog } from '@/lib/audit'
+import { redactPII } from '@/lib/pii'
 
 export async function GET(
   _request: Request,
@@ -45,7 +46,18 @@ export async function GET(
     return NextResponse.json({ error: 'Emergencia no encontrada' }, { status: 404 })
   }
 
-  const { coAssignees: rawCo, ...rest } = emergency
+  if (session.role !== 'VISUALIZADOR' && (emergency.reporterName || emergency.reporterPhone)) {
+    await writeAuditLog({
+      action: 'EMERGENCY_PII_VIEWED',
+      entityType: 'EMERGENCY',
+      entityId: emergency.id,
+      entityLabel: emergency.code,
+      userId: session.id,
+      userName: session.name,
+    })
+  }
+
+  const { coAssignees: rawCo, ...rest } = redactPII(emergency, session)
   return NextResponse.json({
     ...rest,
     coAssignees: rawCo.map((ca) => ca.user),
