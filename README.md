@@ -1,8 +1,10 @@
 # AlertaComunal
 
-Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seguimiento de emergencias comunales.
+Plataforma SaaS multi-tenant para registrar, georreferenciar, gestionar y hacer seguimiento de emergencias comunales. Cada municipalidad opera de forma aislada sobre la misma infraestructura.
 
-**Demo en vivo:** [https://alerta-comunal-production.up.railway.app](https://alerta-comunal-production.up.railway.app)
+**Producción:** [https://alertacomunal.elementalpro.cl](https://alertacomunal.elementalpro.cl) — desplegado en AWS (ver [Arquitectura en AWS](#arquitectura-en-aws-producción)).
+
+**Manuales de uso:** [Manual de Administrador](https://alertacomunal.elementalpro.cl/manual-administrador.html) · [Guía para reportar emergencias](https://alertacomunal.elementalpro.cl/manual-usuario-publico.html)
 
 ## Stack tecnológico
 
@@ -14,21 +16,117 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 | Base de datos | PostgreSQL + Prisma ORM |
 | Autenticación | JWT con jose (cookies httpOnly) |
 | Mapas | Leaflet + React-Leaflet + OpenStreetMap |
-| Geocodificación | Google Maps Places API (autocomplete) + Nominatim (reverse) |
+| Geocodificación | Google Maps Places API (autocompletado) + Google Geocoding API (reversa) + Nominatim (respaldo) |
 | Validaciones | Zod + React Hook Form |
-| Deploy | Railway |
+| Cache / rate limiting | Redis (ElastiCache) con fallback en memoria |
+| Almacenamiento | S3 (evidencias fotográficas) con fallback local |
+| Correo | Resend |
+| Infraestructura | Terraform (AWS) — ver sección dedicada |
+| Proceso en servidor | PM2 (cluster mode) sobre EC2 |
+| Deploy alternativo | Railway (Nixpacks, sin Terraform) |
+
+## Arquitectura en AWS (producción)
+
+Infraestructura completa como código en `infra/aws/*.tf`, región `sa-east-1` (São Paulo) por defecto en el despliegue actual, configurable vía `aws_region`.
+
+```
+Internet
+   │
+   ▼
+Route53 (opcional) ── ACM (TLS) ── WAFv2
+   │
+   ▼
+ALB (subredes públicas, 2 AZ)
+   │  health check GET /api/health
+   ▼
+Auto Scaling Group (subredes privadas "app", 2 AZ)
+   │  EC2 t3.small · Amazon Linux 2023 · PM2 cluster (2 procesos)
+   │  IMDSv2 obligatorio · IAM role (SSM + S3 + CloudWatch Logs)
+   ▼
+┌─────────────┬──────────────────┬────────────────────┐
+│ RDS Postgres│ ElastiCache Redis│ S3 (evidencias)     │
+│ (subred data)│ (subred data)   │ + VPC Gateway Endpt │
+└─────────────┴──────────────────┴────────────────────┘
+```
+
+### Componentes
+
+| Componente | Detalle |
+|---|---|
+| **Red** | VPC `/16` propia con subredes públicas, privadas de aplicación y privadas de datos en 2 AZ. NAT Gateway (único por defecto, `single_nat_gateway`) para salida a internet desde las subredes privadas (Resend, npm). VPC Gateway Endpoint a S3 para no pagar NAT en tráfico de evidencias. |
+| **Cómputo** | Auto Scaling Group (min 2 / max 6 / deseado 2, ajustable) sobre Launch Template con AMI Amazon Linux 2023 más reciente. Health check tipo `ELB` con `grace period` de 600s (build de Next.js in-place tarda varios minutos). Escalado automático por CPU (target tracking, 60%). |
+| **Balanceo** | Application Load Balancer con listener HTTPS (TLS 1.3, certificado ACM) y redirección HTTP→HTTPS. Target group apunta al puerto 3000 con health check en `/api/health`. |
+| **Base de datos** | RDS PostgreSQL 16, `gp3` encriptado, backups automáticos (7 días por defecto), `deletion_protection` activado, Multi-AZ opcional (`db_multi_az`). |
+| **Cache** | ElastiCache Redis 7.1 (un nodo por defecto) usado por `src/lib/rate-limit.ts` para rate limiting distribuido entre instancias. |
+| **Almacenamiento** | Bucket S3 dedicado a evidencias fotográficas, con política de lectura pública y lifecycle rule. |
+| **WAF** | Web ACL regional asociada al ALB: límite de 2000 req/5min por IP, `AWSManagedRulesCommonRuleSet` (con `rule_action_override` en `SizeRestrictions_BODY` para no bloquear reportes ciudadanos con foto) y `AWSManagedRulesKnownBadInputsRuleSet`. |
+| **Observabilidad** | CloudWatch Log Group para la app, alarmas de CPU alto, 5xx del ALB, hosts unhealthy, conexiones RDS altas y almacenamiento RDS bajo — todas notifican a un tópico SNS por correo (`alerts_email`). |
+| **Secretos** | `JWT_SECRET` y la contraseña de RDS se generan con `random_password` y se guardan como `SecureString` en SSM Parameter Store (`/alertacomunal/prod/*`), nunca en el código. Las instancias las leen vía IAM role al arrancar. |
+| **Acceso de emergencia** | EC2 Instance Connect Endpoint (SSH sin bastion) + SSM Session Manager/Run Command para diagnóstico remoto, restringido a un CIDR admin opcional. |
+| **DNS/TLS** | Registro Route53 opcional (`domain_name` + `hosted_zone_id`) apuntando al ALB; si no se usa Route53, se entrega `alb_dns_name` para crear un CNAME manual (ej. en Cloudflare). |
+
+### Variables de Terraform (`infra/aws/variables.tf`)
+
+| Variable | Requerida | Default | Descripción |
+|---|---|---|---|
+| `app_repo_url` | Sí | — | URL git del repo que cada instancia clona al arrancar |
+| `certificate_arn` | Sí | — | ARN de certificado ACM ya validado para el listener HTTPS |
+| `alerts_email` | Sí | — | Correo que recibe las alarmas de CloudWatch vía SNS |
+| `aws_region` | No | `us-east-1` | Región AWS |
+| `environment` / `project` | No | `prod` / `alertacomunal` | Prefijo de nombres de recursos |
+| `azs` | No | 2 AZ de `us-east-1` | Zonas de disponibilidad a usar |
+| `instance_type` | No | `t3.small` | Tipo de instancia del ASG |
+| `asg_min_size` / `asg_max_size` / `asg_desired_capacity` | No | `2` / `6` / `2` | Capacidad del Auto Scaling Group |
+| `db_instance_class` | No | `db.t4g.micro` | Clase de instancia RDS |
+| `db_multi_az` | No | `false` | Standby síncrono en otra AZ |
+| `redis_node_type` | No | `cache.t3.micro` | Clase de nodo ElastiCache |
+| `domain_name` / `hosted_zone_id` | No | — | Si se completan, Terraform crea el registro Route53 |
+| `admin_cidr` / `ssh_key_name` | No | — | Habilitan SSH directo además de SSM (solo para depuración temporal) |
+| `resend_api_key` / `email_enabled` / `google_maps_api_key` | No | `""` / `false` / `""` | Se guardan en SSM, igual que en Railway |
+| `public_default_municipality_slug` | No | `demo` | Municipalidad usada como fallback en reportes públicos |
+
+Copia `infra/aws/terraform.tfvars.example` a `terraform.tfvars` (gitignored) y completa los valores antes de aplicar.
+
+### Desplegar o actualizar la infraestructura
+
+```bash
+cd infra/aws
+terraform init
+terraform plan
+terraform apply
+```
+
+`terraform apply` provisiona todo desde cero (~75 recursos). Para actualizar solo el código de la app (sin tocar infraestructura), basta con:
+
+```bash
+git push origin main
+aws autoscaling start-instance-refresh \
+  --auto-scaling-group-name alertacomunal-prod-asg \
+  --region sa-east-1 \
+  --preferences "MinHealthyPercentage=50,InstanceWarmup=600"
+```
+
+El Launch Template clona el repo (`app_repo_url` / `app_repo_branch`), instala dependencias, corre `prisma generate` y `next build`, y levanta la app con PM2 (`ecosystem.config.js`, 2 procesos en cluster mode). El script de arranque vive en `infra/aws/templates/user_data.sh.tpl`.
+
+### Costo aproximado
+
+Con los valores por defecto (2× `t3.small`, `db.t4g.micro` sin Multi-AZ, `cache.t3.micro`, NAT Gateway único) el costo mensual estimado ronda los **USD 140**, dominado por EC2, NAT Gateway y RDS. Reducir a 1 instancia deseada o eliminar el NAT Gateway (usando solo el S3 Gateway Endpoint) baja el costo a cambio de menor resiliencia.
 
 ## Funcionalidades
 
 - Login seguro con roles (SUPER_ADMIN, ADMIN, OPERADOR, VISUALIZADOR) y rate limiting Redis distribuido (5 intentos / 15 min, fallback a memoria)
 - Dashboard con KPIs en tiempo real vía SSE — reconexión automática, indicador "En vivo", sin polling
 - CRUD completo de emergencias con código automático (EMG-2026-XXXX) y paginación (50/página)
+- **Eliminación de emergencias** desde el detalle (SUPER_ADMIN y ADMIN), con confirmación inline
 - Mapa interactivo con marcadores por prioridad (interno y público ciudadano sin login)
-- Subida de evidencias fotográficas (local o MinIO/S3) con limpieza automática al eliminar emergencias
+- Subida de evidencias fotográficas (local o S3) con limpieza automática al eliminar emergencias
 - Gestión de tareas por emergencia con historial de actividad completo
+- **Multi-municipalidad real en las rutas públicas**: `/reportar/[slug]` y `/mapa-publico/[slug]` fijan la municipalidad automáticamente; `/reportar` y `/mapa-publico` sin slug piden región/comuna o muestran un desplegable de municipalidades activas (`/api/municipios-publicos`)
+- El mapa público **se recentra automáticamente** en el centroide de las emergencias de la municipalidad elegida en el desplegable
 - Formulario ciudadano público en `/reportar` (sin login) con GPS, geocodificación y foto opcional; rate limiting 5 reportes/IP/15min
 - Mapa público ciudadano en `/mapa-publico` (sin login) con emergencias activas; rate limiting 60 req/IP/5min
 - Consulta pública de estado en `/consulta` (sin login); rate limiting 30 req/IP/10min
+- Página de inicio con accesos directos a mapa público, formulario ciudadano, consulta y ambos manuales de uso
 - Reporte imprimible/PDF por emergencia con historial completo y bloque de firma
 - Exportación CSV con filtros activos; PII oculto para VISUALIZADOR
 - Filtros avanzados: estado, prioridad, tipo, sector, rango de fechas, texto libre
@@ -36,6 +134,27 @@ Plataforma SaaS municipal para registrar, georreferenciar, gestionar y hacer seg
 - **Panel de auditoría de seguridad** (`/admin/auditoria`) — log permanente de eventos críticos del sistema
 - **Panel de uso por municipalidad** — 6 KPIs, distribución por tipo, emergencias recientes
 - Validación de usuario activo en cada request — bloqueo inmediato sin esperar expiración JWT
+- Healthcheck (`GET /api/health`) usado como target del ALB en AWS
+
+## Multi-municipalidad y acceso público
+
+| Ruta | Requiere login | Comportamiento |
+|---|---|---|
+| `/reportar` | No | Pide región y comuna; asigna la municipalidad por coincidencia o usa `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` |
+| `/reportar/[slug]` | No | Fija la municipalidad indicada por `slug`; oculta región/comuna |
+| `/mapa-publico` | No | Desplegable con todas las municipalidades activas (`/api/municipios-publicos`); al elegir una, navega a su slug y el mapa se recentra en el centroide de sus emergencias |
+| `/mapa-publico/[slug]` | No | Mapa filtrado y centrado en esa municipalidad |
+| `/consulta` | No | Búsqueda de una emergencia propia por código, sin datos de otras |
+| `/api/municipios-publicos` | No | Lista `{ slug, name }` de municipalidades con `active: true`, rate-limited |
+
+## Manuales de uso
+
+Dos guías completas, alojadas como páginas estáticas propias de la app (no dependen de servicios externos):
+
+- **`/manual-administrador.html`** — roles y permisos, dashboard, gestión de emergencias, usuarios, municipalidades, plantillas de correo, auditoría.
+- **`/manual-usuario-publico.html`** — cómo reportar una emergencia, indicar ubicación (autocompletado, GPS o pin arrastrable), consultar el estado y preguntas frecuentes.
+
+Ambos enlazados desde el footer de la página de inicio (`src/app/page.tsx`).
 
 ## Administración SaaS
 
@@ -54,49 +173,41 @@ Disponible solo para `SUPER_ADMIN`. Incluye:
 
 - **Dashboard global**: total de municipalidades, usuarios y emergencias en toda la plataforma
 - **Municipalidades** (`/admin/municipalidades`): listado con emergencias activas por municipio, crear, editar, activar/desactivar
-- **Detalle de municipalidad** (`/admin/municipalidades/[id]`): 6 KPIs operacionales, distribución por tipo de emergencia con barras horizontales, emergencias recientes, gestión de usuarios
-- **Usuarios** (`/admin/usuarios`): listado global, crear, editar rol/municipalidad, activar/desactivar, cambiar contraseña
+- **Detalle de municipalidad** (`/admin/municipalidades/[id]`): 6 KPIs operacionales, distribución por tipo de emergencia, emergencias recientes, gestión de usuarios
+- **Plantillas de correo** (`/admin/municipalidades/[id]/templates`): asunto y cuerpo HTML personalizables por municipalidad para los correos de asignación y de nuevo reporte ciudadano, con variables `{{code}}`, `{{type}}`, `{{link}}`, etc.
+- **Usuarios** (`/admin/usuarios`): listado global, crear, editar rol/municipalidad, activar/desactivar, cambiar contraseña, **eliminar** (solo SUPER_ADMIN)
 - **Auditoría** (`/admin/auditoria`): log permanente de eventos de seguridad — EMERGENCY_DELETED, LOGIN_FAILED, RATE_LIMIT_HIT, EMAIL_SENT/FAILED; filtrable y paginado
+
+`ADMIN` gestiona usuarios `OPERADOR`/`VISUALIZADOR` solo de su propia municipalidad (`ADMIN_ASSIGNABLE_ROLES` en `src/lib/permissions.ts`); no puede crear otro `ADMIN` ni cambiar la municipalidad de un usuario fuera de la suya.
 
 ### Gestión de municipalidades
 
 Campos: nombre, slug (único), región, comuna, activo.
 
 Reglas:
-- El slug solo puede contener letras minúsculas, números y guiones (ej: `santiago-sur`)
+- El slug solo puede contener letras minúsculas, números y guiones (ej: `tierra-amarilla`) y es el que se usa en `/reportar/[slug]` y `/mapa-publico/[slug]`
 - No se permite borrado físico — solo activar/desactivar
-- Si se desactiva una municipalidad, sus usuarios siguen en la DB pero no deben operar
+- Una municipalidad inactiva desaparece del desplegable público y deja de aceptar reportes por su slug
 - El slug no debe cambiarse si está en uso como `PUBLIC_DEFAULT_MUNICIPALITY_SLUG`
 
 ### Gestión de usuarios
 
-Campos: nombre, email, contraseña (al crear), rol, municipalidad, activo, preferencias de notificación.
+Campos: nombre, email, contraseña (al crear o cambiar), rol, municipalidad, activo, preferencias de notificación.
 
 Reglas:
-- `SUPER_ADMIN` puede crear usuarios de cualquier rol
+- `SUPER_ADMIN` puede crear/editar/**eliminar** usuarios de cualquier rol
 - `ADMIN`, `OPERADOR` y `VISUALIZADOR` **requieren** `municipalityId`
 - `SUPER_ADMIN` opera sin municipalidad asignada
-- No se permite borrado físico de usuarios
 - Cada usuario puede configurar `emailOnAssigned` y `emailOnNewReport` (ambos activos por defecto)
+- Un usuario no puede eliminarse a sí mismo
 
 ### Scope por municipalidad
 
 - `SUPER_ADMIN` ve emergencias, usuarios y métricas de **todas** las municipalidades
-- `ADMIN` ve solo los datos de **su municipalidad**
-- `OPERADOR` y `VISUALIZADOR` igual
+- `ADMIN`, `OPERADOR` y `VISUALIZADOR` ven solo los datos de **su municipalidad**
 - Un usuario sin municipalidad asignada (no `SUPER_ADMIN`) recibe 403 en todas las operaciones
 
-### Cómo agregar una nueva municipalidad
-
-1. Iniciar sesión como `SUPER_ADMIN`
-2. Ir a `/admin/municipalidades` → **Nueva municipalidad**
-3. Completar nombre, slug, región, comuna
-4. Crear usuarios `ADMIN`, `OPERADOR` y `VISUALIZADOR` asignados a esa municipalidad
-5. El admin municipal puede iniciar sesión y gestionar emergencias de su municipalidad
-
 ## Demo municipal
-
-AlertaComunal incluye un conjunto de funcionalidades orientadas a la presentación ante municipios y servicios públicos.
 
 ### Dashboard ejecutivo
 
@@ -104,79 +215,42 @@ El dashboard muestra métricas operacionales en tiempo real:
 
 - **Tarjetas de estado:** total, nuevas, en atención, resueltas, cerradas, críticas activas
 - **Métricas de período:** emergencias registradas y cerradas en los últimos 7 días
-- **Tasa de resolución:** porcentaje de emergencias resueltas o cerradas sobre el total
-- **Tiempo promedio de cierre:** promedio en días desde creación hasta cierre
-- **Distribución por tipo:** barras horizontales con todos los tipos de emergencia
-- **Distribución por prioridad:** barras con colores por nivel de criticidad (crítica, alta, media, baja)
+- **Tasa de resolución** y **tiempo promedio de cierre**
+- **Distribución por tipo** y **por prioridad**
 
-Todos los indicadores respetan el scope municipal: OPERADOR y VISUALIZADOR solo ven datos de su municipalidad; ADMIN ve solo los datos de su municipalidad. SUPER_ADMIN ve todas las municipalidades.
+Todos los indicadores respetan el scope municipal. SUPER_ADMIN ve todas las municipalidades.
 
 ### Exportación CSV
 
-Desde el listado de emergencias, el botón **Exportar CSV** descarga un archivo con todos los registros visibles aplicando los filtros activos:
-
 - Ruta: `GET /api/emergencias/export`
-- Respeta scope municipal (nunca expone datos de otra municipalidad)
-- Respeta todos los filtros: estado, prioridad, tipo, sector, búsqueda de texto, rango de fechas
-- Columnas: código, título, tipo, prioridad, estado, dirección, sector, origen, responsable, fecha creación, fecha ocurrencia, fecha cierre
+- Respeta scope municipal y todos los filtros activos (estado, prioridad, tipo, sector, texto, rango de fechas)
 - **Columnas de PII (reportante, teléfono):** visibles para SUPER_ADMIN, ADMIN y OPERADOR; **ocultas para VISUALIZADOR**
 - Codificación UTF-8 con BOM (compatible con Excel en español)
 
-### Filtros por rango de fecha
-
-El listado de emergencias acepta filtros `desde` y `hasta` sobre el campo `createdAt`. Compatible con todos los filtros existentes (estado, prioridad, tipo, sector, búsqueda). Los filtros también se aplican al CSV exportado.
-
 ### Reportes imprimibles
 
-El reporte de cada emergencia (`/emergencias/[id]/reporte`) está diseñado para impresión institucional:
+El reporte de cada emergencia (`/emergencias/[id]/reporte`) incluye encabezado institucional, datos generales y de ubicación, tabla de tareas, galería de evidencias, historial de actividad completo y bloque de firma. Se genera con el diálogo de impresión del navegador (no hay generación de PDF server-side).
 
-- Encabezado con logo AlertaComunal, nombre de municipalidad, comuna y región
-- Código de emergencia destacado y fecha de emisión
-- Datos organizados en dos columnas (datos generales + ubicación)
-- Tabla de tareas con estado y responsable
-- Galería de evidencias fotográficas
-- **Historial de actividad completo** con fecha, descripción y usuario responsable de cada cambio
-- **Bloque de firma** con espacio para firma del responsable municipal y timbre de unidad
-- Compatible con impresión desde navegador (Ctrl+P / Cmd+P) y guardar como PDF usando el diálogo de impresión del sistema operativo (no hay generación de PDF server-side)
-
-### Formulario ciudadano (`/reportar`)
+### Formulario ciudadano (`/reportar` y `/reportar/[slug]`)
 
 - Acceso público sin login
-- Selección de región y comuna para contextualizar la búsqueda
-- Autocompletado de dirección en tiempo real con Google Maps Places (restricción a Chile)
-- Botón GPS para obtener coordenadas del dispositivo + reverse geocoding con Nominatim
+- Autocompletado de dirección con Google Maps Places (restricción a Chile)
+- Botón GPS + geocodificación reversa con **Google Geocoding API** (Nominatim como respaldo si Google falla o no hay API key)
 - Mini-mapa Leaflet con pin arrastrable para ajuste fino de ubicación
-- Foto opcional (se sube a MinIO/S3 o almacenamiento local)
+- Foto opcional (jpg/png/webp, máx. 5 MB)
 - Genera código único de seguimiento (EMG-YYYY-XXXX)
-- Asigna automáticamente la municipalidad activa por región/comuna, o la municipalidad demo como fallback
-- Header con links a Ver mapa (`/mapa-publico`) y Consultar reporte (`/consulta`)
+- Con `[slug]`: asigna directamente esa municipalidad. Sin `[slug]`: asigna por coincidencia región/comuna o usa la municipalidad demo como fallback
 
-### Mapa público ciudadano (`/mapa-publico`)
+### Mapa público ciudadano (`/mapa-publico` y `/mapa-publico/[slug]`)
 
 - Acceso público sin login, sin datos sensibles
-- Muestra todas las emergencias activas (NUEVA, EN_ATENCIÓN) con coordenadas
-- Tarjetas de estadísticas: total activas, nuevas, en atención
-- Leyenda de prioridad por colores (verde/amarillo/naranja/rojo)
-- Mapa Leaflet con marcadores por prioridad (igual que el mapa interno)
-- Tabla listado bajo el mapa: código, título, tipo, dirección, estado
-- Filtrado por municipalidad vía `PUBLIC_DEFAULT_MUNICIPALITY_SLUG`
-- Máximo 300 emergencias por consulta, ordenadas por fecha de creación desc
-- No expone datos de reportantes ni campos internos
+- Muestra emergencias activas (NUEVA, EN_ATENCIÓN) con coordenadas, coloreadas por prioridad
+- Desplegable de municipalidades activas; al elegir una, el mapa navega a su slug y se recentra en el centroide de sus emergencias
+- Tabla listado bajo el mapa
 
 ### Consulta ciudadana (`/consulta`)
 
-- Búsqueda por código único
-- Devuelve solo campos públicos: estado, tipo, dirección, fechas
-- No expone usuarios internos, teléfonos ni historial de actividad
-
-### Separación por municipalidad
-
-- OPERADOR y VISUALIZADOR solo ven emergencias, usuarios y estadísticas de su municipalidad
-- ADMIN solo ve los datos de su municipalidad (no es vista global)
-- Solo SUPER_ADMIN tiene scope global sobre todas las municipalidades
-- El sidebar muestra nombre, comuna y región de la municipalidad activa
-- Los usuarios sin municipalidad asignada reciben 403 en todas las operaciones
-- Los usuarios desactivados quedan bloqueados inmediatamente (validación contra DB en cada request, no requiere expiración del JWT)
+Búsqueda por código único. Devuelve solo campos públicos (estado, tipo, dirección, fechas); no expone usuarios internos, teléfonos ni historial de actividad.
 
 ## Instalación local
 
@@ -212,13 +286,12 @@ EMAIL_ENABLED=false
 NEXT_PUBLIC_DEMO_MODE=false
 ```
 
-> Sin `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` el formulario funciona (GPS y mini-mapa siguen operativos) pero el autocompletado de dirección no aparece.
+> `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` necesita **Maps JavaScript API**, **Places API** y **Geocoding API** habilitadas en Google Cloud Console. Sin ella, el formulario funciona (GPS y mini-mapa siguen operativos vía Nominatim) pero sin autocompletado ni geocodificación de alta precisión.
 > Sin `RESEND_API_KEY` o con `EMAIL_ENABLED=false` los correos no se envían, pero las emergencias se crean correctamente.
 
 ### 3. Inicializar base de datos
 
 ```bash
-# Aplica migraciones y carga datos iniciales (todo en uno)
 npm run prisma:setup
 ```
 
@@ -242,16 +315,19 @@ Accede a [http://localhost:3000](http://localhost:3000)
 |----------|-------------|---------|
 | `DATABASE_URL` | URL de conexión PostgreSQL | `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | Secreto JWT — **obligatorio en producción** | Cadena aleatoria 32+ chars (`openssl rand -base64 32`) |
-| `APP_URL` | URL base de la aplicación | `http://localhost:3000` |
-| `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` | Slug de municipalidad para reportes ciudadanos | `demo` |
-| `STORAGE_PROVIDER` | Backend de almacenamiento de archivos | `local` |
+| `APP_URL` | URL base de la aplicación | `https://alertacomunal.elementalpro.cl` |
+| `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` | Slug de municipalidad fallback para reportes sin coincidencia | `demo` |
+| `STORAGE_PROVIDER` | Backend de almacenamiento de archivos | `local` o `s3` |
 | `MAX_UPLOAD_SIZE_MB` | Tamaño máximo de upload en MB | `5` |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | API key de Google Maps (Places + Geocoding). Sin ella el autocompletado se desactiva. | Activar en Google Cloud Console: Maps JavaScript API + Places API |
-| `RESEND_API_KEY` | API key de Resend para envío de correos. Obligatoria solo si `EMAIL_ENABLED=true`. | `re_xxxx...` |
-| `EMAIL_FROM` | Remitente de los correos automáticos. El dominio debe estar verificado en Resend. Default: `tecnico@elementalpro.cl`. | `notificaciones@midominio.cl` |
-| `EMAIL_ENABLED` | Activa el envío de correos. Si es `false` o no está, no se envían correos. | `true` / `false` |
-| `REDIS_URL` | URL de conexión Redis para rate limiting distribuido (multi-instancia). Opcional — sin ella el rate limiting usa memoria in-process (suficiente para instancia única). | `redis://user:pass@host:6379` |
-| `NEXT_PUBLIC_DEMO_MODE` | `true` muestra el panel QuickLogin en la página principal con credenciales precargadas. **No usar en producción real.** Default: `false`. | `true` / `false` |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | API key de Google Maps (Places + Geocoding). Sin ella, autocompletado y geocodificación reversa de alta precisión se desactivan (cae a Nominatim). | Habilitar en Google Cloud Console |
+| `RESEND_API_KEY` | API key de Resend. Obligatoria solo si `EMAIL_ENABLED=true`. | `re_xxxx...` |
+| `EMAIL_FROM` | Remitente de los correos automáticos (dominio verificado en Resend). Default: `tecnico@elementalpro.cl`. | `notificaciones@midominio.cl` |
+| `EMAIL_ENABLED` | Activa el envío de correos. | `true` / `false` |
+| `REDIS_URL` | Conexión Redis para rate limiting distribuido. Opcional — sin ella cae a memoria in-process. | `redis://user:pass@host:6379` |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_PUBLIC_URL` | Requeridas solo si `STORAGE_PROVIDER=s3`. En AWS, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` pueden omitirse: la instancia EC2 usa su IAM role automáticamente. | Ver sección Almacenamiento |
+| `NEXT_PUBLIC_DEMO_MODE` | `true` muestra el panel QuickLogin en la página principal. **No usar en producción real.** | `true` / `false` |
+
+En AWS estas variables no se configuran a mano: Terraform las escribe en SSM Parameter Store (`ssm_params.tf`) y el script de arranque las inyecta como `.env.production.local` al clonar el repo.
 
 ## Comandos disponibles
 
@@ -268,7 +344,9 @@ npm run prisma:seed         # Cargar datos de ejemplo
 npm run prisma:setup        # migrate deploy + seed (todo en uno)
 ```
 
-## Deploy en Railway
+## Deploy en Railway (alternativa sin Terraform)
+
+Railway sigue siendo una opción válida para un despliegue simple de instancia única (sin Auto Scaling ni WAF).
 
 ### Paso 1: Repositorio GitHub
 
@@ -283,13 +361,9 @@ git clone https://github.com/pintoco/alerta-comunal.git
 
 ### Paso 3: Agregar PostgreSQL
 
-En el proyecto Railway: **New** → **Database** → **PostgreSQL**
-
-Railway vincula automáticamente la variable `DATABASE_URL` al servicio.
+En el proyecto Railway: **New** → **Database** → **PostgreSQL**. Railway vincula automáticamente `DATABASE_URL`.
 
 ### Paso 4: Variables de entorno
-
-En **Variables** del servicio agrega:
 
 ```
 JWT_SECRET=<genera con: openssl rand -base64 32>
@@ -303,21 +377,13 @@ EMAIL_FROM=tecnico@elementalpro.cl
 EMAIL_ENABLED=true
 ```
 
-> `RESEND_API_KEY` y `EMAIL_ENABLED=true` son opcionales. Sin ellas las emergencias se crean correctamente pero no se envían correos.
+> **No agregar `NODE_ENV`** como variable de servicio. Railway inyecta un valor no estándar que confunde a Next.js; el build ya usa `cross-env NODE_ENV=production` para forzar el modo correcto.
 
 ### Paso 4b (opcional): Volumen para imágenes persistentes
 
-Railway elimina archivos al redesplegar. Para conservar las imágenes subidas:
+Railway elimina archivos al redesplegar. Con `STORAGE_PROVIDER=local`, monta un Volume en `/app/public/uploads` para conservarlas, o usa `STORAGE_PROVIDER=s3` directamente.
 
-1. En el proyecto Railway → **New** → **Volume**
-2. Configura el mount path: `/app/public/uploads`
-3. Railway montará el volumen en ese directorio automáticamente
-
-Sin volumen, las imágenes se pierden en cada deploy (el reporte se crea igualmente, solo se pierde el archivo).
-
-> **No agregar `NODE_ENV`** como variable de servicio. Railway inyecta un valor no estándar que confunde a Next.js. El script de build ya incluye `NODE_ENV=production next build` para forzar el modo correcto.
-
-### Paso 5: Configurar comandos en Railway Settings
+### Paso 5: Comandos en Railway Settings
 
 | Campo | Valor |
 |-------|-------|
@@ -325,17 +391,9 @@ Sin volumen, las imágenes se pierden en cada deploy (el reporte se crea igualme
 | Start Command | `npm run start` |
 | Release Command | `npx prisma migrate deploy && npx prisma db seed` |
 
-> El `postinstall` ejecuta `prisma generate` automáticamente al hacer `npm install`.
-
-> **Primera vez con DB ya existente** (creada con `prisma db push`): ejecutar una sola vez antes de cambiar el Release Command:
-> ```bash
-> railway run npx prisma migrate resolve --applied 20260512000000_init
-> ```
-> Esto marca la migración inicial como ya aplicada sin re-ejecutar el SQL.
-
 ### Paso 6: Deploy
 
-Railway detecta el push a `main` y despliega automáticamente. El primer deploy tarda ~2-4 minutos.
+Railway detecta el push a `main` y despliega automáticamente.
 
 ## Usuarios demo
 
@@ -348,298 +406,166 @@ Railway detecta el push a `main` y despliega automáticamente. El primer deploy 
 | `visualizador@alertacomunal.cl` | `Visualizador123` | VISUALIZADOR | Municipalidad Demo |
 
 **Formulario ciudadano público:** `/reportar` (no requiere login)
-**Consulta de estado:** `/consulta` (no requiere login — ingrese el código de seguimiento)
+**Consulta de estado:** `/consulta` (no requiere login)
 
 ## Estructura del proyecto
 
 ```
 alerta-comunal/
+├── infra/
+│   └── aws/                   # Terraform completo: VPC, ALB, ASG, RDS, ElastiCache,
+│                               # S3, WAF, CloudWatch, Route53, IAM, SSM, Instance Connect
+├── ecosystem.config.js        # Configuración PM2 (cluster mode) para EC2
 ├── prisma/
-│   ├── schema.prisma          # Modelos: Municipality, User, Emergency, Task, Evidence, ActivityLog, AuditLog
+│   ├── schema.prisma          # Modelos: Municipality, User, Emergency, Task, Evidence,
+│   │                          # EmergencyCoAssignee, MunicipalityEmailTemplate, ActivityLog, AuditLog
 │   ├── migrations/
-│   │   ├── migration_lock.toml
-│   │   └── 20260512000000_init/migration.sql
-│   └── seed.ts                # Admin + operadores + municipalidades + emergencias de ejemplo
+│   └── seed.ts                # Admin + operadores + municipalidad demo + emergencias de ejemplo
 ├── public/
-│   └── uploads/               # Imágenes subidas localmente (gitignored)
+│   ├── uploads/                       # Imágenes subidas localmente (gitignored)
+│   ├── manual-administrador.html      # Manual de uso — personal municipal
+│   └── manual-usuario-publico.html    # Guía de uso — vecinos y vecinas
 ├── src/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── auth/          # Login, logout, session
-│   │   │   ├── emergencias/   # CRUD emergencias + estado + export CSV
-│   │   │   ├── tareas/        # CRUD tareas por emergencia
-│   │   │   ├── evidencias/    # Subida y eliminación de evidencias
-│   │   │   ├── reporte-publico/ # GET (consulta por código) + POST (nuevo reporte ciudadano)
-│   │   │   ├── mapa-publico/  # GET emergencias activas (público, sin auth)
-│   │   │   ├── dashboard/     # stats/ (KPIs snapshot) + stream/ (SSE tiempo real)
-│   │   │   └── admin/         # CRUD municipalidades, usuarios y audit-log (SUPER_ADMIN)
-│   │   ├── dashboard/         # Dashboard con estadísticas en tiempo real
-│   │   ├── emergencias/       # Listado, nueva, detalle, editar, reporte PDF
-│   │   ├── mapa/              # Mapa interactivo interno (requiere login)
-│   │   ├── mapa-publico/      # Mapa público ciudadano (sin login)
-│   │   ├── reportar/          # Formulario público ciudadano (con geocodificación y foto)
-│   │   ├── consulta/          # Consulta pública de estado por código
-│   │   ├── admin/             # Panel SUPER_ADMIN: municipalidades, usuarios y auditoría
-│   │   ├── login/             # Autenticación
-│   │   ├── not-found.tsx      # Página 404
-│   │   └── layout.tsx         # Layout raíz
+│   │   │   ├── auth/                # Login, logout, session
+│   │   │   ├── emergencias/         # CRUD emergencias + estado + export CSV
+│   │   │   ├── reporte-publico/     # GET (consulta por código) + POST (nuevo reporte ciudadano)
+│   │   │   ├── mapa-publico/        # GET emergencias activas (público, admite ?slug=)
+│   │   │   ├── municipios-publicos/ # GET municipalidades activas (público)
+│   │   │   ├── dashboard/           # stats/ (KPIs snapshot) + stream/ (SSE tiempo real)
+│   │   │   ├── health/              # Healthcheck para el target group del ALB
+│   │   │   └── admin/               # CRUD municipalidades, usuarios, plantillas y audit-log
+│   │   ├── dashboard/          # Dashboard con estadísticas en tiempo real
+│   │   ├── emergencias/         # Listado, nueva, detalle, editar, reporte PDF
+│   │   ├── mapa/                # Mapa interactivo interno (requiere login)
+│   │   ├── mapa-publico/        # Mapa público + [slug] (sin login)
+│   │   ├── reportar/            # Formulario público + [slug] (sin login)
+│   │   ├── consulta/            # Consulta pública de estado por código
+│   │   ├── admin/               # Panel SUPER_ADMIN/ADMIN: municipalidades, usuarios, auditoría
+│   │   ├── login/
+│   │   └── layout.tsx
 │   ├── components/
-│   │   ├── admin/             # UserForm, MunicipalityForm, MunicipalityToggle, UserToggle
-│   │   ├── dashboard/         # DashboardClient (SSE client), StatsCard, KPICards
-│   │   ├── demo/              # QuickLogin (visible solo si NEXT_PUBLIC_DEMO_MODE=true)
-│   │   ├── emergencies/       # EmergencyForm, EmergencyTable, EmergencyFilters,
-│   │   │                      # TaskList, EvidenceGallery, PrintButtons,
-│   │   │                      # LocationPicker (GPS+geocoding+mapa), MiniMap (Leaflet)
-│   │   ├── layout/            # Sidebar, Header, MainLayout
-│   │   ├── map/               # MapWrapper (client), EmergencyMap (Leaflet)
-│   │   └── ui/                # Button, Modal, Alert, Loading
+│   │   ├── admin/               # UserForm, MunicipalityForm, toggles, delete buttons
+│   │   ├── dashboard/           # DashboardClient (SSE), StatsCard, KPICards
+│   │   ├── emergencies/         # EmergencyForm, EmergencyTable, EmergencyFilters, TaskList,
+│   │   │                        # EvidenceGallery, EmergencyDeleteButton, LocationPicker, MiniMap
+│   │   ├── layout/               # Sidebar, Header, MainLayout
+│   │   ├── map/                  # MapWrapper, EmergencyMap (con MapRecenter)
+│   │   └── ui/
 │   ├── lib/
-│   │   ├── auth.ts            # JWT / sesión (jose)
-│   │   ├── audit.ts           # writeAuditLog() — helper fire-and-forget para AuditLog
-│   │   ├── config.ts          # Configuración centralizada (municipalityConfig)
-│   │   ├── dashboard.ts       # getDashboardStats() — queries optimizadas para KPIs
-│   │   ├── email.ts           # Resend: sendEmergencyAssignmentEmail, sendMunicipalityNewReportEmail
-│   │   ├── permissions.ts     # requireAuth, requireRole, requireSuperAdmin, MANAGE_ROLES
-│   │   ├── prisma.ts          # Singleton cliente Prisma
-│   │   ├── redis.ts           # getRedisClient() — singleton ioredis con fallback a null
-│   │   ├── tenant.ts          # getMunicipalityFilter, requireMunicipalityAssigned
-│   │   ├── utils.ts           # Labels, formatters (client-safe, sin Prisma)
-│   │   ├── generate-code.ts   # Generador de códigos EMG (server-only)
-│   │   ├── rate-limit.ts      # Rate limiter Redis/memoria con fallback automático
-│   │   ├── storage/
-│   │   │   ├── index.ts       # Abstracción: validateFile, saveUpload, deleteUpload
-│   │   │   ├── local.ts       # Provider local (public/uploads)
-│   │   │   └── s3.ts          # Provider MinIO/S3 (@aws-sdk/client-s3)
-│   │   └── validations/       # Schemas Zod (emergency, user, municipality)
-│   ├── data/
-│   │   └── chile-regions-communes.ts  # Dataset oficial de regiones y comunas de Chile
-│   └── types/
-│       └── index.ts           # Interfaces TypeScript
-├── middleware.ts               # Protección de rutas JWT
+│   │   ├── auth.ts               # JWT / sesión (jose)
+│   │   ├── audit.ts              # writeAuditLog()
+│   │   ├── config.ts             # Configuración centralizada
+│   │   ├── dashboard.ts
+│   │   ├── email.ts              # Resend + plantillas por municipalidad
+│   │   ├── permissions.ts        # requireAuth, requireRole, requireSuperAdmin, requireUserAdmin
+│   │   ├── tenant.ts             # getMunicipalityFilter, getEmergencyScope, requireEmergencyAccess
+│   │   ├── rate-limit.ts         # Redis/memoria con fallback automático
+│   │   ├── generate-code.ts      # Generador de códigos EMG (server-only)
+│   │   ├── storage/              # index.ts (abstracción), local.ts, s3.ts
+│   │   └── validations/          # Schemas Zod
+│   ├── data/chile-regions-communes.ts
+│   └── types/index.ts
+├── middleware.ts                 # Protección de rutas JWT (Edge runtime)
 └── ...config files
 ```
 
 ## Notas técnicas
 
 - **Auth:** JWT en cookies httpOnly con `jose`. Sin NextAuth.
-- **Rate limiting:** Implementado en `src/lib/rate-limit.ts` con dos backends intercambiables. Cuando `REDIS_URL` está configurado usa Redis (patrón atómico `INCR` + `PEXPIRE`) — distribuido y correcto con múltiples réplicas. Sin `REDIS_URL`, cae en modo in-memory (`Map`) — suficiente para instancia única. Máximo 5 intentos de login por IP en ventana de 15 minutos; se reinicia al lograr acceso exitoso. El cambio entre backends es transparente para el endpoint de login.
-- **Geolocalización:** Componente `LocationPicker` compartido entre `/reportar` y el formulario interno. Ofrece tres modos: (1) **autocompletado Google Maps Places** — al escribir en el input se muestran sugerencias restringidas a Chile (`componentRestrictions: { country: 'cl' }`), al seleccionar se obtienen coordenadas exactas de la API de Google; (2) botón **GPS** que llama a `navigator.geolocation` y hace reverse geocoding con Nominatim para obtener la dirección textual; (3) **mini-mapa Leaflet con pin arrastrable** — al mover el pin se actualiza la dirección automáticamente por reverse geocoding. El contexto de región/comuna se muestra como hint pero la restricción al país la aplica Google directamente.
-- **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components. El Server Component `mapa/page.tsx` usa `<MapWrapper>` que internamente hace el dynamic import. El mini-mapa del `LocationPicker` usa el mismo patrón (`MiniMap.tsx` importado con `dynamic`).
-- **Prisma en cliente:** `utils.ts` no importa Prisma. La función `generateEmergencyCode()` vive en `generate-code.ts` (server-only) para evitar bundling issues.
-- **Race condition en códigos:** La función `generateEmergencyCode()` usa `COUNT` (no atómico). Los endpoints POST de emergencias implementan un loop de reintentos (máx. 3) capturando el error Prisma P2002 en el campo `code`.
-- **Migraciones controladas:** El proyecto usa `prisma migrate deploy` con archivos versionados en `prisma/migrations/`. El Release Command de Railway las aplica automáticamente en cada deploy. Para crear una nueva migración en desarrollo: `npm run prisma:migrate:dev`.
-- **AuditLog permanente:** La tabla `AuditLog` no tiene FK constraints para sobrevivir a eliminaciones en cascada de emergencias o usuarios. Usa campos denormalizados (`userId`, `userName`, `entityId`, `entityLabel`) como strings planos. El helper `src/lib/audit.ts` es fire-and-forget.
-- **NODE_ENV en Railway:** Railway inyecta un valor no estándar en `NODE_ENV` durante el build, lo que hace que Next.js use el runtime de desarrollo y crashee en el pre-rendering. El build script usa `NODE_ENV=production next build` para forzar el runtime de producción correcto. No configurar `NODE_ENV` como variable de servicio en Railway.
-- **Almacenamiento de imágenes:** Railway usa filesystem efímero. Con `STORAGE_PROVIDER=local` las imágenes se pierden en cada redeploy salvo que se use un Railway Volume. Con `STORAGE_PROVIDER=s3` las imágenes se guardan en MinIO/S3 y la URL pública se persiste en PostgreSQL. Ver sección "Almacenamiento de evidencias" más abajo.
+- **Rate limiting:** `src/lib/rate-limit.ts`, dos backends intercambiables (Redis atómico o memoria in-process), transparente para los endpoints.
+- **Geolocalización:** `LocationPicker` compartido entre `/reportar` y el formulario interno. Autocompletado con Google Places; geocodificación reversa (GPS y pin arrastrable) con **Google Geocoding API** como principal y Nominatim como respaldo automático si Google falla o no hay API key — Nominatim tiene cobertura de direcciones muy dispersa fuera de Santiago y puede "adivinar" con el punto indexado más cercano.
+- **Mapa:** `dynamic()` con `ssr: false` solo puede usarse en Client Components (`MapWrapper.tsx`). `EmergencyMap.tsx` incluye un componente `MapRecenter` (`useMap()` + `map.setView()`) porque `MapContainer` de react-leaflet solo aplica `center`/`zoom` al montar, no en actualizaciones posteriores.
+- **Prisma en cliente:** `utils.ts` no importa Prisma; `generateEmergencyCode()` vive en `generate-code.ts` (server-only).
+- **Race condition en códigos:** `generateEmergencyCode()` usa `COUNT` (no atómico); los endpoints POST reintentan hasta 3 veces ante P2002.
+- **Migraciones controladas:** `prisma migrate deploy` con archivos versionados en `prisma/migrations/`.
+- **AuditLog permanente:** sin FK constraints, sobrevive a eliminaciones en cascada. Helper fire-and-forget en `src/lib/audit.ts`.
+- **Healthcheck:** `GET /api/health` corre `SELECT 1` vía Prisma; usado como target del ALB en AWS.
+- **IAM sin comodines:** los ARNs de SSM/KMS en `infra/aws/iam.tf` usan `data.aws_caller_identity.current.account_id` explícito, no `*`, para principio de mínimo privilegio.
+- **WAF y body size:** `AWSManagedRulesCommonRuleSet` bloquea por defecto bodies grandes (`SizeRestrictions_BODY`); se sobreescribe a `count` porque los reportes ciudadanos con foto lo superan.
 
 ## Almacenamiento de evidencias
 
-El sistema soporta dos proveedores. Se selecciona con `STORAGE_PROVIDER`.
+Dos proveedores intercambiables vía `STORAGE_PROVIDER`.
 
 ### Modo local (por defecto)
-
-Adecuado para desarrollo y prototipos simples.
 
 ```env
 STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=5
 ```
 
-> **Advertencia Railway:** `public/uploads` no es persistente si no se configura un Volume. Los archivos se pierden en cada redeploy. Para persistencia, crea un Volume en Railway montado en `/app/public/uploads`.
+Adecuado para desarrollo. En Railway, `public/uploads` no es persistente sin un Volume. En AWS, cada instancia del ASG tiene su propio disco — **no usar `local` en AWS**, ya que las imágenes no se compartirían entre instancias ni sobrevivirían a un instance refresh.
 
-### Modo MinIO/S3
-
-Recomendado para Railway en producción o prototipos estables.
+### Modo S3 (recomendado en producción)
 
 ```env
 STORAGE_PROVIDER=s3
-S3_ENDPOINT=https://minio.midominio.cl
-S3_REGION=us-east-1
-S3_BUCKET=alerta-comunal-evidencias
-S3_ACCESS_KEY_ID=tu_access_key
-S3_SECRET_ACCESS_KEY=tu_secret_key
-S3_FORCE_PATH_STYLE=true
-S3_PUBLIC_URL=https://minio.midominio.cl/alerta-comunal-evidencias
+S3_ENDPOINT=https://s3.sa-east-1.amazonaws.com
+S3_REGION=sa-east-1
+S3_BUCKET=alertacomunal-prod-evidencias
+S3_FORCE_PATH_STYLE=false
+S3_PUBLIC_URL=https://alertacomunal-prod-evidencias.s3.sa-east-1.amazonaws.com
 MAX_UPLOAD_SIZE_MB=5
 ```
 
-- El bucket debe existir antes del primer deploy. La app **no lo crea automáticamente**.
-- MinIO debe tener acceso público de lectura o una URL pública configurada en `S3_PUBLIC_URL`.
-- La app guarda la URL pública completa en PostgreSQL (`evidence.url`).
-- Las evidencias antiguas con URL `/uploads/...` siguen funcionando (archivos estáticos de Next.js).
-- Si faltan variables S3 críticas, la subida falla con mensaje claro sin romper el servidor.
-
-### Compatibilidad con evidencias antiguas
-
-| Evidencia | `url` guardada | Cómo se muestra |
-|-----------|---------------|-----------------|
-| Local | `/uploads/uuid.jpg` | Servida por Next.js como estático |
-| MinIO/S3 | `https://minio.../uuid.jpg` | URL pública directa |
-
-Al eliminar una evidencia, el sistema detecta automáticamente si es local (URL empieza con `/`) o S3 (URL empieza con `http`) y borra el archivo del lugar correcto.
-
-## Configuración en Railway para Redis
-
-AlertaComunal usa Redis para rate limiting distribuido cuando hay múltiples réplicas. Sin Redis, el sistema cae automáticamente a rate limiting en memoria (suficiente para instancia única).
-
-### Paso 1: Agregar Redis en Railway
-
-1. En el proyecto Railway → **New** → **Database** → **Redis**
-2. Railway crea el servicio Redis automáticamente
-
-### Paso 2: Vincular Redis al servicio Next.js
-
-1. Ir al servicio de AlertaComunal → **Variables**
-2. Hacer clic en **Add Variable Reference**
-3. Seleccionar el servicio Redis → elegir `REDIS_URL`
-4. Railway inyecta la variable como referencia dinámica:
-   ```
-   REDIS_URL = ${{Redis.REDIS_URL}}
-   ```
-5. Railway redespliega automáticamente al guardar
-
-### Verificación
-
-En los logs del servicio Next.js: si la conexión es exitosa no aparece nada (silencioso). Si hay error de conexión se registra `[Redis] connection error: ...` y el sistema continúa con fallback en memoria — el login sigue funcionando.
-
-> Sin `REDIS_URL` configurado el sistema funciona igual con rate limiting en memoria. Redis solo es necesario al escalar a múltiples réplicas.
-
-## Configuración en Railway para MinIO
-
-1. Ir al servicio de AlertaComunal → **Variables**
-2. Agregar las siguientes variables:
-
-```
-STORAGE_PROVIDER=s3
-S3_ENDPOINT=https://minio.midominio.cl
-S3_REGION=us-east-1
-S3_BUCKET=alerta-comunal-evidencias
-S3_ACCESS_KEY_ID=...
-S3_SECRET_ACCESS_KEY=...
-S3_FORCE_PATH_STYLE=true
-S3_PUBLIC_URL=https://minio.midominio.cl/alerta-comunal-evidencias
-MAX_UPLOAD_SIZE_MB=5
-```
-
-3. Redeployar el servicio.
-4. Probar subida desde `/reportar` y desde el detalle de emergencia → pestaña Evidencias.
-5. Verificar que el archivo aparece en el bucket MinIO y que la URL pública abre la imagen.
-
-> No agregar `NODE_ENV` como variable manual en Railway.
+- En AWS, `S3_ACCESS_KEY_ID` y `S3_SECRET_ACCESS_KEY` se pueden omitir: `src/lib/storage/s3.ts` cae automáticamente al IAM role de la instancia EC2.
+- Fuera de AWS (o con MinIO), sí se requieren `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` y típicamente `S3_FORCE_PATH_STYLE=true`.
+- El bucket debe existir antes del primer deploy (Terraform lo crea automáticamente en AWS).
+- La app guarda la URL pública completa en PostgreSQL (`evidence.url`); al eliminar detecta si es local (`/...`) o S3 (`http...`) y borra del lugar correcto.
 
 ## Notificaciones por correo con Resend
 
-AlertaComunal usa [Resend](https://resend.com) para notificaciones automáticas por correo.
-
-### Variables requeridas
-
 | Variable | Descripción |
 |----------|-------------|
-| `RESEND_API_KEY` | API key de Resend — obligatoria solo si `EMAIL_ENABLED=true` |
-| `EMAIL_FROM` | Remitente. Por defecto: `tecnico@elementalpro.cl` |
-| `EMAIL_ENABLED` | `true` activa el envío. Si es `false` o no existe, no se envían correos |
-
-> El dominio del remitente (`EMAIL_FROM`) debe estar verificado en Resend para que el correo llegue correctamente.
+| `RESEND_API_KEY` | Obligatoria solo si `EMAIL_ENABLED=true` |
+| `EMAIL_FROM` | Remitente (dominio verificado en Resend). Default: `tecnico@elementalpro.cl` |
+| `EMAIL_ENABLED` | `true` activa el envío |
 
 ### Correos que se envían
 
-1. **Nuevo reporte ciudadano** — Al crear un reporte desde `/reportar`, se envía al(los) `ADMIN` activo(s) de la municipalidad asignada **que tengan habilitada la preferencia `emailOnNewReport`**. Incluye código, tipo, prioridad, datos del reportante, descripción y link al detalle interno.
+1. **Nuevo reporte ciudadano** — a los `ADMIN` activos de la municipalidad con `emailOnNewReport` habilitado.
+2. **Asignación de emergencia** — al responsable asignado, si tiene `emailOnAssigned` habilitado.
 
-2. **Asignación de emergencia** — Al crear o editar una emergencia y asignar un responsable nuevo, se envía a ese usuario **si tiene habilitada la preferencia `emailOnAssigned`**. Incluye código, tipo, prioridad, dirección y link directo.
-
-### Preferencias de notificación por usuario
-
-Cada usuario puede configurar qué correos recibe desde `/admin/usuarios/[id]/editar`:
-
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `emailOnAssigned` | Boolean (default: `true`) | Recibir correo al ser asignado como responsable de una emergencia |
-| `emailOnNewReport` | Boolean (default: `true`) | Recibir correo cuando se recibe un reporte ciudadano (solo aplica a ADMINs) |
-
-Las preferencias se guardan en la tabla `User` y se respetan en todos los envíos de correo. Al crear un usuario, ambas preferencias están activadas por defecto.
-
-### Comportamiento ante fallos
-
-- Si el envío falla: la emergencia **igual se crea**. No hay rollback.
-- El error se registra en consola y en el `ActivityLog` de la emergencia (`action: EMAIL_FAILED`).
-- Si `EMAIL_ENABLED=false`: no se intenta enviar ningún correo.
-- Si no hay administradores activos en la municipalidad: se registra advertencia en consola.
-
-### ActivityLog de correos y sistema
-
-| Action | Cuándo |
-|--------|--------|
-| `CREATED` | Emergencia o reporte creado |
-| `ASSIGNED` | Responsable asignado o reasignado |
-| `MUNICIPALITY_ASSIGNED` | Municipalidad asignada automáticamente por región/comuna |
-| `EVIDENCE_ADDED` | Evidencia fotográfica adjuntada |
-| `EMAIL_SENT` | Correo enviado exitosamente |
-| `EMAIL_FAILED` | Fallo al enviar correo |
-
-### Configuración en Railway
-
-1. Ir al servicio → **Variables** y agregar:
-```
-RESEND_API_KEY=re_xxxx...
-EMAIL_FROM=tecnico@elementalpro.cl
-EMAIL_ENABLED=true
-```
-2. Verificar que el dominio del remitente está habilitado en Resend.
-3. Redeployar el servicio.
-
-### Asignación automática de municipalidad por región/comuna
-
-Cuando un ciudadano selecciona región y comuna en `/reportar`, el sistema busca automáticamente una municipalidad activa con esa región/comuna y asigna el reporte a ella. Si no existe coincidencia, usa la municipalidad configurada en `PUBLIC_DEFAULT_MUNICIPALITY_SLUG` como fallback.
+Cada municipalidad puede personalizar asunto y cuerpo de ambas plantillas desde `/admin/municipalidades/[id]/templates` (solo SUPER_ADMIN). Si el envío falla, la emergencia se crea igual y queda registrado `EMAIL_FAILED` en el `ActivityLog`.
 
 ## Roadmap
 
 ### Completado
 
-- [x] CRUD completo de emergencias con código único (EMG-YYYY-XXXX) y reintentos ante colisión
-- [x] Dashboard con KPIs operacionales: tasa de resolución, tiempo promedio de cierre, distribución por tipo y prioridad
-- [x] Mapa interactivo interno con marcadores por prioridad (Leaflet + OpenStreetMap)
-- [x] **Mapa público ciudadano** (`/mapa-publico`) — emergencias activas sin login, sin datos sensibles
-- [x] Subida de evidencias fotográficas (local o MinIO/S3, proveedor configurable)
-- [x] **Limpieza automática de archivos** al eliminar una emergencia (local y S3)
-- [x] Geolocalización precisa: Google Maps Places Autocomplete (forward) + GPS + Nominatim reverse + mini-mapa con pin arrastrable
-- [x] Selects región/comuna en cascada con dataset oficial de Chile
+- [x] CRUD completo de emergencias con código único y reintentos ante colisión
+- [x] Dashboard con KPIs operacionales en tiempo real (SSE)
+- [x] Mapa interactivo interno y **mapa público ciudadano** con marcadores por prioridad
+- [x] **Multi-municipalidad real**: rutas `/reportar/[slug]` y `/mapa-publico/[slug]`, endpoint `/api/municipios-publicos`, desplegable de municipalidades activas
+- [x] **Recentrado automático del mapa público** al elegir municipalidad (centroide de sus emergencias)
+- [x] Subida de evidencias fotográficas (local o S3) con limpieza automática al eliminar
+- [x] Geolocalización precisa: Google Places Autocomplete + **Google Geocoding API** (reversa) + GPS + mini-mapa con pin arrastrable + respaldo Nominatim
 - [x] Asignación automática de municipalidad por región/comuna en reportes ciudadanos
-- [x] Notificaciones por correo con Resend (nuevo reporte al ADMIN + asignación al responsable)
-- [x] **Preferencias de notificación por usuario** (`emailOnAssigned`, `emailOnNewReport`)
-- [x] Gestión de usuarios CRUD desde UI (crear, editar, activar/desactivar, cambiar contraseña)
-- [x] Panel multi-municipio para SUPER_ADMIN (municipalidades, usuarios, scope global)
-- [x] **Panel de uso por municipalidad** — 6 KPIs (total, activas, últimos 30 días, tasa de resolución, tiempo promedio de cierre, usuarios activos), distribución por tipo con barras horizontales, emergencias recientes, columna "Activas" en el listado
-- [x] **Panel de auditoría de seguridad** (`/admin/auditoria`) — EMERGENCY_DELETED, LOGIN_FAILED, RATE_LIMIT_HIT, EMAIL_SENT/FAILED; tabla permanente sin FK que sobrevive a eliminaciones en cascada
-- [x] **Migraciones controladas** — archivos versionados en `prisma/migrations/`, `migrate deploy` en Release Command (en reemplazo de `db push`)
-- [x] **Validación de asignación cross-municipalidad**: no se puede asignar un usuario de otra municipalidad como responsable
-- [x] **Permisos de UI por rol**: VISUALIZADOR no ve botones de crear, editar ni eliminar emergencias
-- [x] Exportación CSV con filtros activos (compatible Excel en español con BOM)
-- [x] Reporte imprimible/PDF por emergencia con historial completo y bloque de firma
-- [x] Flujo de cierre de emergencias (closedAt, closingNotes, notas obligatorias)
-- [x] Filtros avanzados con rango de fechas
-- [x] Rate limiting en login (5 intentos / 15 min por IP)
-- [x] Consulta pública de estado por código único (`/consulta`)
-- [x] Actualizaciones en tiempo real en el dashboard vía SSE (Server-Sent Events): snapshot inicial server-side, refresco cada 30s, keepalive para Railway, reconexión automática con backoff exponencial e indicador "En vivo"
-- [x] Redis para rate limiting distribuido (multi-instancia): patrón atómico `INCR` + `PEXPIRE`, fallback automático a memoria in-process si `REDIS_URL` no está configurado
-- [x] **Rate limiting en rutas públicas** (`/api/reporte-publico`, `/api/mapa-publico`): 5 reportes/IP/15min, 30 consultas/IP/10min, 60 solicitudes mapa/IP/5min
-- [x] **Modo demo condicional** (`NEXT_PUBLIC_DEMO_MODE`): QuickLogin y credenciales solo visibles si la variable está activa; ocultos en producción real
-- [x] **Validación de usuario activo en cada request**: usuarios desactivados quedan bloqueados inmediatamente sin esperar expiración del JWT; municipalidades inactivas bloquean a sus usuarios municipales
-- [x] **Paginación en listado de emergencias**: 50 registros por página, controles anterior/siguiente, compatible con todos los filtros
-- [x] **CSV sin PII para VISUALIZADOR**: columnas de reportante y teléfono ocultas; visibles para ADMIN, OPERADOR y SUPER_ADMIN
-- [x] **Closing notes obligatorio al cerrar** (mínimo 10 caracteres)
-- [x] **Validación Zod en status de tareas**: valores inválidos retornan 400 con mensaje claro
-- [x] **AuditLog en operaciones admin críticas**: crear/editar/activar/desactivar municipalidades y usuarios, cambio de contraseña (sin exponer la contraseña en metadata)
-- [x] **Índices de base de datos**: Emergency (municipalityId, status, createdAt y combinados), ActivityLog (emergencyId), AuditLog (action, createdAt, entityType, userId)
-- [x] **Dashboard optimizado**: cálculo de tiempo promedio de cierre limitado a últimos 90 días (máx. 500 registros) en lugar de toda la historia
+- [x] Notificaciones por correo con Resend + **plantillas configurables por municipalidad**
+- [x] Preferencias de notificación por usuario (`emailOnAssigned`, `emailOnNewReport`)
+- [x] Gestión de usuarios CRUD completa: crear, editar, activar/desactivar, cambiar contraseña, **eliminar** (SUPER_ADMIN)
+- [x] **Eliminación de emergencias desde la UI** (SUPER_ADMIN y ADMIN)
+- [x] Panel multi-municipio para SUPER_ADMIN + panel de uso por municipalidad
+- [x] Panel de auditoría de seguridad permanente (`/admin/auditoria`)
+- [x] Migraciones controladas (`prisma migrate deploy`), sin `db push` en producción
+- [x] Exportación CSV con filtros activos, sin PII para VISUALIZADOR
+- [x] Reporte imprimible/PDF por emergencia con historial y bloque de firma
+- [x] Rate limiting distribuido con Redis (login, reportes públicos, mapa público, consulta)
+- [x] Validación de usuario/municipalidad activa en cada request
+- [x] **Manuales de uso propios** (`/manual-administrador.html`, `/manual-usuario-publico.html`) enlazados desde la página de inicio
+- [x] **Infraestructura AWS completa como código** (Terraform): VPC multi-AZ, ALB + Auto Scaling Group, RDS, ElastiCache, S3, WAF, CloudWatch + SNS, IAM de mínimo privilegio, SSM Parameter Store para secretos
+- [x] **Healthcheck dedicado** (`/api/health`) como target del ALB
+- [x] **WAF ajustado** para no bloquear reportes ciudadanos con foto (`SizeRestrictions_BODY`)
 
 ### Corto plazo (próximos sprints)
 
-- [x] Múltiples responsables por emergencia (co-asignados) — tabla `EmergencyCoAssignee` + checkboxes en formulario
-- [x] Templates de correo configurables por municipalidad — modelo `MunicipalityEmailTemplate` + editor SUPER_ADMIN
 - [ ] Webhooks configurables por municipalidad — notificaciones HTTP a sistemas externos
+- [ ] Rotar la access key AWS usada durante el setup inicial de Terraform
+- [ ] Retirar el acceso SSH/EC2 Instance Connect de depuración una vez terminadas las pruebas en producción
 
 ### Largo plazo
 
 - [ ] Integración WhatsApp Business API (notificaciones al reportante y al ADMIN)
 - [ ] App móvil React Native para operadores en terreno
-- [ ] Backups automáticos y monitoreo (Railway Pro + Sentry o similar)
+- [ ] Monitoreo adicional (Sentry o similar) sobre las alarmas de CloudWatch ya existentes
