@@ -558,6 +558,56 @@ Cada evento se puede activar/desactivar de forma independiente (`onEmergencyCrea
 
 Implementación en `src/lib/webhooks.ts` (`sendWebhook`), modelo `MunicipalityWebhook` en `prisma/schema.prisma`.
 
+### Ejemplo de receptor para una municipalidad sin sistema propio
+
+El webhook necesita algo escuchando esa URL. Dos caminos según su capacidad técnica:
+
+- **Sin código**: una herramienta de automatización tipo n8n, Pipedream o Zapier da una URL propia gratis y arma visualmente qué hacer con cada evento (avisar por Slack/WhatsApp, guardar en una planilla, etc.). No verifica la firma automáticamente, pero alcanza para uso interno de baja exigencia.
+- **Con código**: un servidor mínimo que valida la firma y reenvía a donde corresponda. Ejemplo en Node/Express que reenvía a Slack:
+
+```js
+const express = require('express')
+const crypto = require('crypto')
+
+const app = express()
+const WEBHOOK_SECRET = process.env.ALERTACOMUNAL_WEBHOOK_SECRET
+const SLACK_URL = process.env.SLACK_INCOMING_WEBHOOK_URL
+
+// express.raw(): necesitamos el body crudo para que la firma calce exacto.
+app.use(express.raw({ type: 'application/json' }))
+
+app.post('/webhooks/alertacomunal', async (req, res) => {
+  const signature = req.headers['x-alertacomunal-signature']
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(req.body)
+    .digest('hex')
+
+  if (signature !== expected) return res.status(401).send('Firma inválida')
+
+  const { event, emergency } = JSON.parse(req.body.toString('utf8'))
+  const text = {
+    EMERGENCY_CREATED: `🆕 Nueva emergencia ${emergency?.code}`,
+    NEW_CITIZEN_REPORT: `📣 Reporte ciudadano ${emergency?.code}`,
+    EMERGENCY_ASSIGNED: `👤 Emergencia ${emergency?.code} asignada`,
+    TEST: '✅ Ping de prueba recibido',
+  }[event]
+
+  if (SLACK_URL && text) {
+    await fetch(SLACK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+  }
+  res.status(200).send('OK')
+})
+
+app.listen(3001)
+```
+
+Pasos: desplegar este servidor en cualquier lado accesible por `https://` → crear un [Incoming Webhook de Slack](https://api.slack.com/messaging/webhooks) gratis → pegar la URL del servidor en `/admin/municipalidades/[id]/webhook` y copiar el secreto generado a `ALERTACOMUNAL_WEBHOOK_SECRET` → probar con el botón "Enviar prueba". La verificación de firma no es opcional: sin ella, cualquiera que adivine la URL podría enviar "emergencias" falsas.
+
 ## Roadmap
 
 ### Completado

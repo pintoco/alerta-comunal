@@ -312,6 +312,7 @@
       <li><a href="#usuarios">Usuarios</a></li>
       <li><a href="#municipalidades">Municipalidades</a></li>
       <li><a href="#plantillas">Plantillas de correo</a></li>
+      <li><a href="#webhook">Webhook</a></li>
       <li><a href="#auditoria">Auditoría</a></li>
       <li><a href="#enlaces">Enlaces públicos</a></li>
       <li><a href="#practicas">Buenas prácticas</a></li>
@@ -521,8 +522,74 @@
       </div>
     </section>
 
+    <section class="sec" id="webhook">
+      <h2>9. Webhook <span class="route">/admin/municipalidades/[id]/webhook</span> <span class="badge solo">Solo Super Admin</span></h2>
+      <p class="sec-sub">Notifica automáticamente a un sistema externo del municipio (mesa de ayuda, Slack, ERP propio) cuando ocurren eventos, en paralelo al correo — no lo reemplaza.</p>
+      <ul>
+        <li>Una sola URL <span class="route">https://</span> por municipalidad. Se puede activar/desactivar por evento: <strong>emergencia creada</strong>, <strong>nuevo reporte ciudadano</strong> y <strong>asignación de responsable</strong>.</li>
+        <li>Cada envío llega firmado con un <strong>secreto único por municipalidad</strong> (header <span class="chip">X-AlertaComunal-Signature: sha256=&lt;hmac&gt;</span>) para que el receptor pueda verificar que el evento es auténtico antes de confiar en él.</li>
+        <li>Un solo intento por evento, con tiempo de espera corto y <strong>sin reintentos</strong>: si el sistema del municipio está caído, la emergencia o el reporte se registran igual — nunca se bloquea la operación por un webhook caído.</li>
+        <li>Botón <strong>Enviar prueba</strong> en la misma pantalla, para verificar la integración sin esperar un evento real.</li>
+      </ul>
+
+      <h3>Si el municipio no tiene un sistema propio para recibirlo</h3>
+      <p>El webhook necesita algo del otro lado escuchando esa URL. Dos caminos según su capacidad técnica:</p>
+      <ul>
+        <li><strong>Sin código:</strong> una herramienta de automatización tipo n8n, Pipedream o Zapier les da una URL propia gratis y arman visualmente qué hacer con cada evento (avisar por Slack/WhatsApp, guardar en una planilla, etc.). No verifica la firma automáticamente, pero alcanza para uso interno de baja exigencia.</li>
+        <li><strong>Con código:</strong> un pequeño servidor (Node/Express, por ejemplo) que valida la firma y reenvía a donde necesiten. Ejemplo mínimo — recibe el evento y lo manda a un canal de Slack:</li>
+      </ul>
+      <pre style="background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--ink-soft);white-space:pre"><code>const express = require('express')
+const crypto = require('crypto')
+
+const app = express()
+const WEBHOOK_SECRET = process.env.ALERTACOMUNAL_WEBHOOK_SECRET
+const SLACK_URL = process.env.SLACK_INCOMING_WEBHOOK_URL
+
+// express.raw(): necesitamos el body crudo para que la firma calce exacto.
+app.use(express.raw({ type: 'application/json' }))
+
+app.post('/webhooks/alertacomunal', async (req, res) =&gt; {
+  const signature = req.headers['x-alertacomunal-signature']
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(req.body)
+    .digest('hex')
+
+  if (signature !== expected) return res.status(401).send('Firma inválida')
+
+  const { event, emergency } = JSON.parse(req.body.toString('utf8'))
+  const text = {
+    EMERGENCY_CREATED: `🆕 Nueva emergencia ${emergency?.code}`,
+    NEW_CITIZEN_REPORT: `📣 Reporte ciudadano ${emergency?.code}`,
+    EMERGENCY_ASSIGNED: `👤 Emergencia ${emergency?.code} asignada`,
+    TEST: '✅ Ping de prueba recibido',
+  }[event]
+
+  if (SLACK_URL &amp;&amp; text) {
+    await fetch(SLACK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+  }
+  res.status(200).send('OK')
+})
+
+app.listen(3001)</code></pre>
+      <ol class="steps">
+        <li>Desplegar este servidor donde sea (debe quedar accesible por <span class="route">https://</span>).</li>
+        <li>Crear un <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener noreferrer">Incoming Webhook de Slack</a> gratis y poner esa URL en <span class="chip">SLACK_INCOMING_WEBHOOK_URL</span>.</li>
+        <li>Pegar la URL del servidor en <span class="route">/admin/municipalidades/[id]/webhook</span>, guardar, y copiar el secreto generado a <span class="chip">ALERTACOMUNAL_WEBHOOK_SECRET</span> del servidor.</li>
+        <li>Usar el botón <strong>Enviar prueba</strong> y confirmar que llega el mensaje a Slack.</li>
+      </ol>
+      <div class="callout warn">
+        <span class="icon">🔐</span>
+        <div><strong>La verificación de firma no es opcional</strong>Sin ella, cualquiera que adivine la URL del receptor podría enviar "emergencias" falsas al sistema del municipio.</div>
+      </div>
+    </section>
+
     <section class="sec" id="auditoria">
-      <h2>9. Auditoría <span class="route">/admin/auditoria</span> <span class="badge solo">Solo Super Admin</span></h2>
+      <h2>10. Auditoría <span class="route">/admin/auditoria</span> <span class="badge solo">Solo Super Admin</span></h2>
       <p class="sec-sub">Registro de seguridad global e independiente del historial de cada emergencia: no se borra aunque se elimine una emergencia.</p>
       <ul>
         <li>Incluye eventos como inicios de sesión fallidos, bloqueos por exceso de intentos, emergencias eliminadas y correos enviados o fallidos.</li>
@@ -531,7 +598,7 @@
     </section>
 
     <section class="sec" id="enlaces">
-      <h2>10. Enlaces públicos que puedes compartir</h2>
+      <h2>11. Enlaces públicos que puedes compartir</h2>
       <p class="sec-sub">Estos enlaces no requieren iniciar sesión; puedes difundirlos en redes, avisos municipales o folletería.</p>
       <ul class="linklist">
         <li><span class="route">/reportar</span><span class="desc">Formulario ciudadano general (pide región y comuna).</span></li>
@@ -543,7 +610,7 @@
     </section>
 
     <section class="sec" id="practicas">
-      <h2>11. Buenas prácticas</h2>
+      <h2>12. Buenas prácticas</h2>
       <ul>
         <li>No compartas tu contraseña ni dejes tu sesión abierta en equipos compartidos.</li>
         <li>Al desvincular a alguien de la institución, <strong>desactiva</strong> su usuario; reserva la eliminación (Super Admin) para casos excepcionales.</li>
