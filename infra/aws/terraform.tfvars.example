@@ -30,6 +30,11 @@ resend_api_key       = ""
 email_enabled        = false
 google_maps_api_key  = ""
 
+# CAPTCHA adaptativo en /reportar — crear un sitio en
+# https://dash.cloudflare.com/?to=/:account/turnstile
+turnstile_site_key   = ""
+turnstile_secret_key = ""
+
 public_default_municipality_slug = "demo"
 
 # Ajusta según presupuesto/carga esperada.

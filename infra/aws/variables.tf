@@ -175,3 +175,17 @@ variable "public_default_municipality_slug" {
   type    = string
   default = "demo"
 }
+
+variable "turnstile_site_key" {
+  description = "Cloudflare Turnstile site key (CAPTCHA adaptativo en /reportar). Opcional — vacío desactiva el CAPTCHA."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "turnstile_secret_key" {
+  description = "Cloudflare Turnstile secret key, para verificar el token en el servidor. Opcional — vacío desactiva el CAPTCHA."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

@@ -84,3 +84,17 @@ resource "aws_ssm_parameter" "google_maps_key" {
   type  = "SecureString"
   value = var.google_maps_api_key
 }
+
+resource "aws_ssm_parameter" "turnstile_site_key" {
+  count = var.turnstile_site_key != "" ? 1 : 0
+  name  = "${local.ssm_prefix}/NEXT_PUBLIC_TURNSTILE_SITE_KEY"
+  type  = "SecureString"
+  value = var.turnstile_site_key
+}
+
+resource "aws_ssm_parameter" "turnstile_secret_key" {
+  count = var.turnstile_secret_key != "" ? 1 : 0
+  name  = "${local.ssm_prefix}/TURNSTILE_SECRET_KEY"
+  type  = "SecureString"
+  value = var.turnstile_secret_key
+}
