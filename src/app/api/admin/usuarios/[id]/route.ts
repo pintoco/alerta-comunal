@@ -91,9 +91,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
     }
 
+    // Cambiar rol o municipalidad invalida las sesiones activas de este usuario —
+    // sin esto, un JWT emitido antes del cambio seguiría actuando con los
+    // permisos/municipalidad anteriores hasta que expire (hasta 8h).
+    const roleChanged = result.data.role !== undefined && result.data.role !== existing.role
+    const municipalityChanged =
+      result.data.municipalityId !== undefined && result.data.municipalityId !== existing.municipalityId
+
     const user = await prisma.user.update({
       where: { id },
-      data: result.data,
+      data: {
+        ...result.data,
+        ...(roleChanged || municipalityChanged ? { sessionVersion: { increment: 1 } } : {}),
+      },
       select: {
         id: true, name: true, email: true, role: true, active: true,
         municipalityId: true, emailOnAssigned: true, emailOnNewReport: true, updatedAt: true,

@@ -124,6 +124,7 @@ export interface Session {
   name: string
   role: UserRole
   municipalityId?: string | null
+  sessionVersion: number
 }
 
 export interface DashboardStats {

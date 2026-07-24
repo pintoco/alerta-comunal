@@ -83,6 +83,9 @@ model User {
   password       String
   role           UserRole      @default(OPERADOR)
   active         Boolean       @default(true)
+  // Se incrementa al cambiar contraseña, rol o municipalidad — invalida
+  // cualquier JWT emitido antes del cambio (ver requireAuth/requireSuperAdmin).
+  sessionVersion Int           @default(1)
   municipalityId String?
   municipality   Municipality? @relation(fields: [municipalityId], references: [id])
   createdAt      DateTime      @default(now())

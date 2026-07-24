@@ -90,6 +90,7 @@ export async function POST(request: Request) {
       name: user.name,
       role: user.role,
       municipalityId: user.municipalityId ?? null,
+      sessionVersion: user.sessionVersion,
     }
 
     const token = await createToken(session)

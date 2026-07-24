@@ -286,6 +286,9 @@ EMAIL_FROM=tecnico@elementalpro.cl
 EMAIL_ENABLED=false
 # Demo (opcional — solo para presentaciones, nunca en producción real)
 NEXT_PUBLIC_DEMO_MODE=false
+# Seed: sin esta variable el seed corre en modo productivo (sin datos de ejemplo).
+# Solo para desarrollo local — nunca la actives en un entorno con datos reales.
+SEED_DEMO=true
 ```
 
 > `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` necesita **Maps JavaScript API**, **Places API** y **Geocoding API** habilitadas en Google Cloud Console. Sin ella, el formulario funciona (GPS y mini-mapa siguen operativos vía Nominatim) pero sin autocompletado ni geocodificación de alta precisión.
@@ -296,6 +299,8 @@ NEXT_PUBLIC_DEMO_MODE=false
 ```bash
 npm run prisma:setup
 ```
+
+Con `SEED_DEMO=true` en tu `.env`, esto crea la municipalidad demo, 5 usuarios de prueba y emergencias de ejemplo — las contraseñas quedan impresas en la consola. Sin esa variable, corre el seed productivo: no crea datos de ejemplo (ver sección "Seed de producción").
 
 ### 4. Crear carpeta de uploads
 
@@ -397,15 +402,15 @@ Railway elimina archivos al redesplegar. Con `STORAGE_PROVIDER=local`, monta un 
 
 Railway detecta el push a `main` y despliega automáticamente.
 
-## Usuarios demo
+## Usuarios demo (solo desarrollo local)
 
-| Email | Contraseña | Rol | Scope |
-|-------|-----------|-----|-------|
-| `superadmin@alertacomunal.cl` | `SuperAdmin123` | SUPER_ADMIN | Global — gestiona toda la plataforma |
-| `ppinto@elementalpro.cl` | `Admin123456` | ADMIN | Municipalidad Demo |
-| `mgonzalez@alertacomunal.cl` | `Operador123` | OPERADOR | Municipalidad Demo |
-| `cmartinez@alertacomunal.cl` | `Operador123` | OPERADOR | Municipalidad Demo |
-| `visualizador@alertacomunal.cl` | `Visualizador123` | VISUALIZADOR | Municipalidad Demo |
+Las credenciales de datos de prueba **no se documentan aquí** (nunca en texto plano en un archivo versionado). Para generarlas localmente:
+
+```bash
+SEED_DEMO=true npm run prisma:seed
+```
+
+Las 5 cuentas (SUPER_ADMIN, ADMIN, 2× OPERADOR, VISUALIZADOR) de la municipalidad demo se crean con contraseñas fijas pensadas solo para desarrollo — quedan impresas en la consola al correr el seed. **Nunca configurar `SEED_DEMO=true` en un entorno con datos reales**: sin esa variable, el seed usa el modo productivo (ver sección "Instalación local"), que no crea datos de ejemplo ni contraseñas conocidas.
 
 **Formulario ciudadano público:** `/reportar` (no requiere login)
 **Consulta de estado:** `/consulta` (no requiere login)

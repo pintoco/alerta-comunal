@@ -17,7 +17,11 @@ export async function requireAuth(): Promise<Session | NextResponse> {
     where: { id: session.id },
     select: {
       active: true,
+      role: true,
+      name: true,
+      email: true,
       municipalityId: true,
+      sessionVersion: true,
       municipality: { select: { active: true } },
     },
   })
@@ -26,11 +30,24 @@ export async function requireAuth(): Promise<Session | NextResponse> {
     return NextResponse.json({ error: 'Usuario desactivado o no encontrado' }, { status: 401 })
   }
 
-  if (session.role !== 'SUPER_ADMIN' && user.municipalityId && user.municipality && !user.municipality.active) {
+  if (user.sessionVersion !== session.sessionVersion) {
+    return NextResponse.json({ error: 'Sesión inválida, inicia sesión nuevamente' }, { status: 401 })
+  }
+
+  if (user.role !== 'SUPER_ADMIN' && user.municipalityId && user.municipality && !user.municipality.active) {
     return NextResponse.json({ error: 'La municipalidad asociada está inactiva' }, { status: 403 })
   }
 
-  return session
+  // Rol y municipalidad siempre frescos desde la DB, nunca del JWT — evita que
+  // un cambio de rol/municipalidad quede "congelado" hasta que expire el token.
+  return {
+    id: session.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    municipalityId: user.municipalityId,
+    sessionVersion: user.sessionVersion,
+  }
 }
 
 export function requireRole(session: Session, roles: UserRole[]): NextResponse | null {
@@ -48,23 +65,37 @@ export async function requireSuperAdmin(): Promise<Session | NextResponse> {
   if (!session) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
-  if (session.role !== 'SUPER_ADMIN') {
-    return NextResponse.json(
-      { error: 'Acceso restringido a Super Administradores' },
-      { status: 403 }
-    )
-  }
 
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    select: { active: true },
+    select: { active: true, role: true, name: true, email: true, municipalityId: true, sessionVersion: true },
   })
 
   if (!user || !user.active) {
     return NextResponse.json({ error: 'Usuario desactivado o no encontrado' }, { status: 401 })
   }
 
-  return session
+  if (user.sessionVersion !== session.sessionVersion) {
+    return NextResponse.json({ error: 'Sesión inválida, inicia sesión nuevamente' }, { status: 401 })
+  }
+
+  // Verificar el rol contra la DB, no contra el JWT — un SUPER_ADMIN degradado
+  // no debe seguir pasando este check con un token emitido antes del cambio.
+  if (user.role !== 'SUPER_ADMIN') {
+    return NextResponse.json(
+      { error: 'Acceso restringido a Super Administradores' },
+      { status: 403 }
+    )
+  }
+
+  return {
+    id: session.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    municipalityId: user.municipalityId,
+    sessionVersion: user.sessionVersion,
+  }
 }
 
 export function isSuperAdmin(session: Session): boolean {

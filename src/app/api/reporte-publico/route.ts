@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { generateEmergencyCode } from '@/lib/generate-code'
 import { Prisma } from '@prisma/client'
 import { publicReportSchema } from '@/lib/validations/emergency'
-import { municipalityConfig } from '@/lib/config'
+import { municipalityConfig, isProduction } from '@/lib/config'
 import { validateFile, saveUpload } from '@/lib/storage'
 import {
   sendMunicipalityNewReportEmail,
@@ -159,12 +159,26 @@ export async function POST(request: Request) {
       }
     }
 
-    // Fallback a municipalidad demo
+    // Fallback a municipalidad por defecto — solo fuera de producción.
+    // En producción, crear/usar una municipalidad "demo" silenciosamente
+    // significaría que reportes ciudadanos reales con comuna no reconocida
+    // terminan en un bucket que nadie monitorea. Mejor rechazar con un
+    // mensaje claro que el ciudadano pueda corregir.
     if (!municipalityId) {
+      if (isProduction) {
+        return NextResponse.json(
+          {
+            error:
+              'No pudimos determinar tu municipalidad. Usa el enlace específico de tu municipio o verifica la región/comuna seleccionada.',
+          },
+          { status: 400 }
+        )
+      }
+
       if (data.region && data.commune) {
         console.warn(
           `[reporte-publico] Sin municipalidad activa para ${data.commune}, ${data.region}. ` +
-            'Usando municipalidad por defecto.'
+            'Usando municipalidad por defecto (modo no productivo).'
         )
       }
       try {
