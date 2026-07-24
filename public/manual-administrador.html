@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AlertaComunal — Manual de Administrador</title>
+<style>
+  :root {
+    --paper: #f3f5f8;
+    --surface: #ffffff;
+    --surface-2: #eef1f6;
+    --ink: #12182b;
+    --ink-soft: #4b5567;
+    --muted: #6b7686;
+    --line: #dde3ec;
+    --line-soft: #e8ecf3;
+    --brand: #2554e0;
+    --brand-ink: #16327a;
+    --brand-tint: #e9eefd;
+    --deep: #0f1b33;
+
+    --ok: #157f4a;
+    --ok-tint: #e4f6ec;
+    --warn: #a15c07;
+    --warn-tint: #fdf1e0;
+    --danger: #b3261e;
+    --danger-tint: #fbe9e8;
+    --info: #0b6e85;
+    --info-tint: #e3f4f7;
+    --purple: #6b3fa0;
+    --purple-tint: #f1e9f8;
+
+    --serif: ui-serif, Iowan Old Style, Sitka Text, Georgia, "Times New Roman", serif;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, ui-sans-serif, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(15, 27, 51, 0.04), 0 6px 20px -8px rgba(15, 27, 51, 0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b1120;
+      --surface: #121a2e;
+      --surface-2: #182238;
+      --ink: #e8ecf5;
+      --ink-soft: #b7c0d4;
+      --muted: #8b96ac;
+      --line: #263356;
+      --line-soft: #1d2944;
+      --brand: #6f93ff;
+      --brand-ink: #cddcff;
+      --brand-tint: #16244a;
+      --deep: #060a16;
+
+      --ok: #6bd6a0;
+      --ok-tint: #10301f;
+      --warn: #f0b558;
+      --warn-tint: #33260c;
+      --danger: #ff8b83;
+      --danger-tint: #3a1414;
+      --info: #7fd6e8;
+      --info-tint: #0f2c33;
+      --purple: #c6a4ec;
+      --purple-tint: #2a1d3d;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0b1120; --surface: #121a2e; --surface-2: #182238;
+    --ink: #e8ecf5; --ink-soft: #b7c0d4; --muted: #8b96ac;
+    --line: #263356; --line-soft: #1d2944;
+    --brand: #6f93ff; --brand-ink: #cddcff; --brand-tint: #16244a; --deep: #060a16;
+    --ok: #6bd6a0; --ok-tint: #10301f; --warn: #f0b558; --warn-tint: #33260c;
+    --danger: #ff8b83; --danger-tint: #3a1414; --info: #7fd6e8; --info-tint: #0f2c33;
+    --purple: #c6a4ec; --purple-tint: #2a1d3d;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #f3f5f8; --surface: #ffffff; --surface-2: #eef1f6;
+    --ink: #12182b; --ink-soft: #4b5567; --muted: #6b7686;
+    --line: #dde3ec; --line-soft: #e8ecf3;
+    --brand: #2554e0; --brand-ink: #16327a; --brand-tint: #e9eefd; --deep: #0f1b33;
+    --ok: #157f4a; --ok-tint: #e4f6ec; --warn: #a15c07; --warn-tint: #fdf1e0;
+    --danger: #b3261e; --danger-tint: #fbe9e8; --info: #0b6e85; --info-tint: #e3f4f7;
+    --purple: #6b3fa0; --purple-tint: #f1e9f8;
+    --shadow: 0 1px 2px rgba(15, 27, 51, 0.04), 0 6px 20px -8px rgba(15, 27, 51, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; color: var(--ink); }
+  a { color: var(--brand); }
+  code, .mono { font-family: var(--mono); }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--deep);
+    color: #dbe4ff;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+    box-shadow: var(--shadow);
+  }
+  .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.01em; }
+  .topbar .brand .mark {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--brand);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .topbar .tag {
+    font-size: 12px; color: #9db2ea; font-family: var(--sans);
+    border: 1px solid rgba(157,178,234,0.35); padding: 3px 10px; border-radius: 999px;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 260px minmax(0, 760px);
+    gap: 48px;
+    padding: 40px 24px 96px;
+    justify-content: center;
+  }
+
+  nav.toc {
+    position: sticky;
+    top: 76px;
+    align-self: start;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+  nav.toc p.label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+  nav.toc li { counter-increment: toc; margin-bottom: 2px; }
+  nav.toc a {
+    display: flex; gap: 10px; align-items: baseline;
+    text-decoration: none; color: var(--ink-soft);
+    font-size: 13.5px; padding: 6px 10px; border-radius: 7px;
+    transition: background 0.12s, color 0.12s;
+  }
+  nav.toc a::before {
+    content: counter(toc);
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    width: 16px; flex-shrink: 0;
+  }
+  nav.toc a:hover { background: var(--surface-2); color: var(--ink); }
+
+  main.content { min-width: 0; }
+
+  .titleblock { margin-bottom: 40px; }
+  .eyebrow {
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brand); margin: 0 0 10px;
+  }
+  .titleblock h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 14px; }
+  .titleblock .lede { font-size: 1.05rem; color: var(--ink-soft); margin: 0 0 18px; max-width: 62ch; }
+  .metarow { display: flex; flex-wrap: wrap; gap: 8px 10px; font-size: 12.5px; color: var(--muted); }
+  .metarow span { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; }
+
+  section.sec { padding-top: 40px; margin-top: 40px; border-top: 1px solid var(--line-soft); scroll-margin-top: 84px; }
+  section.sec:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  .sec h2 { font-size: 1.5rem; margin: 0 0 6px; scroll-margin-top: 84px; }
+  .sec .sec-sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .sec h3 { font-size: 1.08rem; margin: 26px 0 10px; }
+  .sec p { color: var(--ink-soft); }
+  .sec ul, .sec ol.steps { padding-left: 0; margin: 12px 0; }
+
+  .route {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--brand-ink);
+    background: var(--brand-tint); border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
+    padding: 2px 9px; border-radius: 6px;
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .badge.super { background: var(--purple-tint); color: var(--purple); }
+  .badge.admin { background: var(--brand-tint); color: var(--brand-ink); }
+  .badge.operador { background: var(--info-tint); color: var(--info); }
+  .badge.visualizador { background: var(--surface-2); color: var(--muted); }
+  .badge.solo { background: var(--danger-tint); color: var(--danger); }
+
+  .rolegrid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0 8px;
+  }
+  @media (max-width: 640px) { .rolegrid { grid-template-columns: 1fr; } }
+  .rolecard {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .rolecard header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .rolecard h4 { margin: 0; font-family: var(--sans); font-size: 14.5px; font-weight: 700; }
+  .rolecard .scope { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+  .rolecard ul { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-soft); }
+  .rolecard ul.cant li { color: var(--muted); }
+  .rolecard ul li { margin-bottom: 4px; }
+  .rolecard .divider { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 10px 0 6px; }
+
+  table.perm { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 16px 0; }
+  table.perm th, table.perm td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+  table.perm th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+  table.perm td.center, table.perm th.center { text-align: center; }
+  .yes { color: var(--ok); font-weight: 700; }
+  .no { color: var(--muted); }
+  .twrap { overflow-x: auto; }
+
+  ol.steps { counter-reset: step; }
+  ol.steps li {
+    list-style: none; counter-increment: step;
+    display: grid; grid-template-columns: 30px 1fr; gap: 14px;
+    margin-bottom: 14px; font-size: 14.5px; color: var(--ink-soft);
+  }
+  ol.steps li::before {
+    content: counter(step);
+    font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    color: var(--brand); background: var(--brand-tint);
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  ol.steps strong { color: var(--ink); }
+
+  .callout {
+    border-radius: var(--radius); padding: 14px 16px; margin: 16px 0;
+    font-size: 13.5px; border: 1px solid transparent; display: flex; gap: 10px;
+  }
+  .callout .icon { flex-shrink: 0; margin-top: 1px; }
+  .callout.tip { background: var(--info-tint); color: color-mix(in srgb, var(--info) 80%, var(--ink)); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+  .callout.warn { background: var(--warn-tint); color: color-mix(in srgb, var(--warn) 80%, var(--ink)); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+  .callout.danger { background: var(--danger-tint); color: color-mix(in srgb, var(--danger) 80%, var(--ink)); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+  .callout.ok { background: var(--ok-tint); color: color-mix(in srgb, var(--ok) 80%, var(--ink)); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+  .callout strong { display:block; margin-bottom:2px; }
+
+  .fieldlist { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 8px; }
+  .fieldlist li {
+    display: grid; grid-template-columns: 160px 1fr; gap: 12px;
+    font-size: 13.5px; padding: 8px 0; border-bottom: 1px dashed var(--line);
+  }
+  .fieldlist li .fname { font-weight: 600; color: var(--ink); }
+  .fieldlist li .fdesc { color: var(--ink-soft); }
+  @media (max-width: 560px) { .fieldlist li { grid-template-columns: 1fr; gap: 2px; } }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .chip {
+    font-family: var(--mono); font-size: 11.5px; padding: 3px 9px; border-radius: 6px;
+    background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--line);
+  }
+
+  .linklist { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; }
+  .linklist li {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px 16px; box-shadow: var(--shadow);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .linklist .desc { font-size: 13px; color: var(--muted); }
+
+  footer.doc { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 12.5px; }
+
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+    nav.toc { position: static; max-height: none; margin-bottom: 8px; }
+    nav.toc ol { display: flex; flex-wrap: wrap; gap: 4px; }
+    nav.toc a { padding: 5px 9px; }
+  }
+
+  @media print {
+    .topbar, nav.toc { display: none; }
+    .shell { grid-template-columns: 1fr; padding: 0; }
+    body { background: white; }
+    section.sec { break-inside: avoid-page; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+    </span>
+    AlertaComunal
+  </div>
+  <span class="tag">Manual interno · Personal municipal</span>
+</div>
+
+<div class="shell">
+  <nav class="toc">
+    <p class="label">Contenido</p>
+    <ol>
+      <li><a href="#roles">Roles y permisos</a></li>
+      <li><a href="#ingreso">Ingresar al sistema</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
+      <li><a href="#emergencias">Gestión de emergencias</a></li>
+      <li><a href="#mapa">Mapa interno</a></li>
+      <li><a href="#usuarios">Usuarios</a></li>
+      <li><a href="#municipalidades">Municipalidades</a></li>
+      <li><a href="#plantillas">Plantillas de correo</a></li>
+      <li><a href="#auditoria">Auditoría</a></li>
+      <li><a href="#enlaces">Enlaces públicos</a></li>
+      <li><a href="#practicas">Buenas prácticas</a></li>
+    </ol>
+  </nav>
+
+  <main class="content">
+    <div class="titleblock">
+      <p class="eyebrow">AlertaComunal</p>
+      <h1>Manual de Administrador</h1>
+      <p class="lede">Guía de uso de la plataforma de gestión de emergencias comunales: qué puede hacer cada rol y cómo operar el sistema día a día.</p>
+      <div class="metarow">
+        <span>Audiencia: SUPER_ADMIN · ADMIN · OPERADOR · VISUALIZADOR</span>
+        <span>Actualizado julio 2026</span>
+      </div>
+    </div>
+
+    <section class="sec" id="roles">
+      <h2>1. Roles y permisos</h2>
+      <p class="sec-sub">La plataforma tiene cuatro roles. El sistema los aplica tanto en la interfaz como en cada llamada al servidor, así que un botón oculto también está bloqueado por detrás.</p>
+
+      <div class="rolegrid">
+        <div class="rolecard">
+          <header><h4>Super Administrador</h4><span class="badge super">Global</span></header>
+          <p class="scope">Ve y gestiona todas las municipalidades a la vez.</p>
+          <ul>
+            <li>Crea, edita y activa/desactiva municipalidades</li>
+            <li>Gestiona cualquier usuario, incluidos otros administradores</li>
+            <li>Único que puede <strong>eliminar</strong> usuarios y emergencias</li>
+            <li>Único con acceso a auditoría global y plantillas de correo</li>
+          </ul>
+        </div>
+        <div class="rolecard">
+          <header><h4>Administrador municipal</h4><span class="badge admin">Su municipalidad</span></header>
+          <p class="scope">Gestión completa dentro de su propia municipalidad.</p>
+          <ul>
+            <li>Crea, edita, cierra y elimina emergencias de su municipalidad</li>
+            <li>Crea y edita usuarios Operador y Visualizador (no otros Admin)</li>
+            <li>Recibe aviso por correo de nuevos reportes ciudadanos</li>
+          </ul>
+          <p class="divider">No puede</p>
+          <ul class="cant">
+            <li>Ver otras municipalidades ni la auditoría global</li>
+            <li>Crear otro Administrador o Super Administrador</li>
+          </ul>
+        </div>
+        <div class="rolecard">
+          <header><h4>Operador</h4><span class="badge operador">Su municipalidad</span></header>
+          <p class="scope">Trabaja el día a día de las emergencias.</p>
+          <ul>
+            <li>Crea y edita emergencias, cambia su estado</li>
+            <li>Sube evidencias fotográficas y gestiona tareas</li>
+            <li>Asigna responsable y co-responsables</li>
+          </ul>
+          <p class="divider">No puede</p>
+          <ul class="cant">
+            <li>Gestionar usuarios ni eliminar emergencias</li>
+          </ul>
+        </div>
+        <div class="rolecard">
+          <header><h4>Visualizador</h4><span class="badge visualizador">Solo lectura</span></header>
+          <p class="scope">Consulta sin capacidad de modificar nada.</p>
+          <ul>
+            <li>Ve dashboard, listado, detalle y mapa</li>
+            <li>Puede exportar el listado a CSV</li>
+          </ul>
+          <p class="divider">No puede</p>
+          <ul class="cant">
+            <li>Crear, editar ni eliminar nada</li>
+            <li>Ver nombre ni teléfono del reportante (se ocultan también en el CSV)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <span class="icon">💡</span>
+        <div><strong>Regla práctica</strong>Usa Visualizador para cualquier persona que solo necesita seguimiento (concejales, prensa, otras áreas): así proteges automáticamente los datos de contacto de quienes reportan.</div>
+      </div>
+    </section>
+
+    <section class="sec" id="ingreso">
+      <h2>2. Ingresar al sistema</h2>
+      <p class="sec-sub">No hay registro abierto: cada cuenta la crea un Administrador o Super Administrador.</p>
+      <ol class="steps">
+        <li>Entra a <span class="route">/login</span> con el dominio de tu municipalidad.</li>
+        <li>Ingresa el <strong>correo</strong> y <strong>contraseña</strong> que te asignaron.</li>
+        <li>La sesión dura <strong>8 horas</strong>; pasado ese tiempo deberás volver a iniciar sesión.</li>
+      </ol>
+      <div class="callout warn">
+        <span class="icon">⚠️</span>
+        <div><strong>¿Olvidaste tu contraseña?</strong>No existe recuperación automática por correo. Pide a tu Administrador (o a un Super Administrador) que te asigne una nueva desde <span class="route">Usuarios → Editar → Cambiar contraseña</span>.</div>
+      </div>
+      <div class="callout warn">
+        <span class="icon">⚠️</span>
+        <div><strong>Cuenta desactivada</strong>Si tu cuenta fue desactivada, el acceso se bloquea de inmediato aunque tu contraseña sea correcta y tu sesión anterior siga vigente.</div>
+      </div>
+    </section>
+
+    <section class="sec" id="dashboard">
+      <h2>3. Dashboard</h2>
+      <p class="sec-sub">Es la primera pantalla al iniciar sesión: un resumen en vivo de la situación comunal.</p>
+      <ul>
+        <li>Tarjetas de estadísticas (total, nuevas, en atención, por prioridad y por tipo) que <strong>se actualizan solas</strong> sin recargar la página.</li>
+        <li>Un indicador discreto muestra si la conexión en vivo está activa, reconectando o con error.</li>
+        <li>Listado de emergencias recientes con acceso directo al detalle.</li>
+        <li>Botón <strong>Nueva emergencia</strong> (oculto para Visualizador).</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="emergencias">
+      <h2>4. Gestión de emergencias</h2>
+      <p class="sec-sub">El núcleo del sistema. Todo lo que ocurre queda registrado en el historial de actividad de cada emergencia.</p>
+
+      <h3>4.1 Listado <span class="route">/emergencias</span></h3>
+      <ul>
+        <li>Filtros combinables: búsqueda de texto (código, título, dirección, nombre del reportante), estado, prioridad, tipo, sector y rango de fechas.</li>
+        <li>Paginado de 50 emergencias por página.</li>
+        <li><strong>Exportar CSV</strong> respeta los filtros activos en pantalla. Visualizador no ve nombre ni teléfono del reportante, tampoco en el archivo exportado.</li>
+      </ul>
+
+      <h3>4.2 Registrar una nueva emergencia</h3>
+      <ol class="steps">
+        <li>Ve a Emergencias → <strong>Nueva emergencia</strong>.</li>
+        <li>Completa <strong>información general</strong>: título, descripción, tipo de emergencia, prioridad y observaciones.</li>
+        <li>Completa <strong>ubicación</strong>: región y comuna, y la dirección exacta — puedes escribirla con autocompletado, usar el botón GPS, o arrastrar el pin en el mini-mapa. Agrega sector/barrio y fecha/hora de ocurrencia si las conoces.</li>
+        <li>Completa los <strong>datos del reportante</strong> (nombre, teléfono) y el origen del reporte (Interno o Ciudadano).</li>
+        <li>Define el <strong>responsable principal</strong> y, si corresponde, co-responsables.</li>
+        <li>Guarda. El sistema genera automáticamente un código único con formato <span class="chip">EMG-2026-0001</span>.</li>
+      </ol>
+
+      <h3>4.3 Trabajar el detalle de una emergencia</h3>
+      <ul class="fieldlist">
+        <li><span class="fname">Generar reporte</span><span class="fdesc">Abre una versión imprimible/PDF con todos los datos de la emergencia, lista para respaldo institucional.</span></li>
+        <li><span class="fname">Cambiar estado</span><span class="fdesc">Nueva → En atención → Resuelta / Cerrada / Descartada. Al resolver o cerrar puedes escribir observaciones de cierre.</span></li>
+        <li><span class="fname">Editar</span><span class="fdesc">Disponible para Admin y Operador: modifica cualquier campo del registro.</span></li>
+        <li><span class="fname">Evidencias</span><span class="fdesc">Sube fotos (jpg, png o webp, máximo 5 MB), amplíalas en galería o elimínalas.</span></li>
+        <li><span class="fname">Tareas</span><span class="fdesc">Crea tareas de seguimiento, asígnalas y marca su estado: pendiente, en proceso, completada o cancelada.</span></li>
+        <li><span class="fname">Historial de actividad</span><span class="fdesc">Registro automático e inalterable de creación, cambios de estado, asignaciones, tareas, evidencias y correos enviados.</span></li>
+        <li><span class="fname">Eliminar<span class="badge solo" style="margin-left:6px">Admin / Super Admin</span></span><span class="fdesc">Borra la emergencia junto a sus evidencias y tareas. Pide confirmación explícita y es permanente.</span></li>
+      </ul>
+
+      <div class="callout danger">
+        <span class="icon">🗑️</span>
+        <div><strong>Eliminar es definitivo</strong>No hay papelera ni forma de recuperar una emergencia eliminada. Si solo quieres archivarla, usa el estado <em>Cerrada</em> o <em>Descartada</em> en vez de eliminarla.</div>
+      </div>
+    </section>
+
+    <section class="sec" id="mapa">
+      <h2>5. Mapa interno <span class="route">/mapa</span></h2>
+      <p class="sec-sub">Visualización geográfica de las emergencias activas de tu municipalidad (excluye Cerradas y Descartadas).</p>
+      <ul>
+        <li>Los marcadores se colorean por prioridad:
+          <div class="chips">
+            <span class="chip">🟢 Baja</span><span class="chip">🟡 Media</span><span class="chip">🟠 Alta</span><span class="chip">🔴 Crítica</span>
+          </div>
+        </li>
+        <li>El mapa se centra automáticamente en el promedio de las emergencias activas; si no hay ninguna, se centra en la región de tu municipalidad.</li>
+        <li>Super Administrador ve las emergencias de todas las municipalidades a la vez, con zoom más amplio.</li>
+        <li>Haz clic en un marcador para ir directo al detalle de esa emergencia.</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="usuarios">
+      <h2>6. Usuarios <span class="route">/admin/usuarios</span> <span class="badge admin">Admin</span> <span class="badge super">Super Admin</span></h2>
+      <p class="sec-sub">Administrador solo ve y gestiona usuarios Operador y Visualizador de su propia municipalidad. Super Administrador ve la lista completa, con la columna Municipalidad.</p>
+
+      <h3>Crear usuario</h3>
+      <ul class="fieldlist">
+        <li><span class="fname">Nombre / Email</span><span class="fdesc">Identifican la cuenta; el email es el usuario de acceso.</span></li>
+        <li><span class="fname">Contraseña inicial</span><span class="fdesc">Mínimo 8 caracteres. El usuario puede seguir usándola o pedir que se la cambien después.</span></li>
+        <li><span class="fname">Rol</span><span class="fdesc">Admin solo puede asignar Operador o Visualizador. Super Admin puede asignar cualquier rol.</span></li>
+        <li><span class="fname">Municipalidad</span><span class="fdesc">Para Admin queda fija en la suya. Super Admin elige cualquiera (o ninguna, solo válido para Super Admin).</span></li>
+        <li><span class="fname">Notificaciones por correo</span><span class="fdesc">Avisar al ser asignado a una emergencia, y avisar al llegar un reporte ciudadano (esta última solo aplica a Administradores).</span></li>
+      </ul>
+
+      <h3>Editar, activar/desactivar y eliminar</h3>
+      <ul>
+        <li><strong>Editar</strong>: mismos campos que al crear, más una sección aparte para <strong>cambiar la contraseña</strong> (déjala vacía si no quieres cambiarla).</li>
+        <li><strong>Activar / Desactivar</strong>: interruptor directo en la tabla. Un usuario desactivado no puede iniciar sesión aunque su contraseña sea correcta — se valida contra la base de datos en cada solicitud, no solo al iniciar sesión.</li>
+        <li><strong>Eliminar</strong> <span class="badge solo">Solo Super Admin</span>: con confirmación inline en la misma fila. No puedes eliminar tu propia cuenta.</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="municipalidades">
+      <h2>7. Municipalidades <span class="route">/admin/municipalidades</span> <span class="badge solo">Solo Super Admin</span></h2>
+      <p class="sec-sub">Cada municipalidad es un tenant independiente: sus emergencias, usuarios y plantillas de correo no se mezclan con las de otras.</p>
+      <ul>
+        <li>El listado muestra nombre, <span class="route">slug</span> (usado en las URLs públicas), cantidad de usuarios, total de emergencias, emergencias activas y estado.</li>
+        <li><strong>Nueva municipalidad</strong>: nombre, slug, región y comuna.</li>
+        <li><strong>Activar / Desactivar</strong>: una municipalidad inactiva desaparece del desplegable del mapa público y deja de aceptar reportes por su slug.</li>
+        <li><strong>Editar</strong>: actualiza los datos básicos en cualquier momento.</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="plantillas">
+      <h2>8. Plantillas de correo <span class="badge solo">Solo Super Admin</span></h2>
+      <p class="sec-sub">Cada municipalidad puede personalizar el asunto y cuerpo de sus correos automáticos desde <span class="route">Municipalidades → (una) → Plantillas</span>.</p>
+      <ul>
+        <li><strong>Correo de asignación</strong>: se envía cuando alguien queda como responsable de una emergencia.</li>
+        <li><strong>Correo de nuevo reporte ciudadano</strong>: se envía a los administradores cuando llega un reporte por el formulario público.</li>
+        <li>Ambos aceptan variables como <span class="chip">{{code}}</span> <span class="chip">{{type}}</span> <span class="chip">{{priority}}</span> <span class="chip">{{address}}</span> <span class="chip">{{description}}</span> <span class="chip">{{link}}</span>, que se reemplazan automáticamente al enviar.</li>
+        <li>Cada plantilla se puede desactivar de forma independiente; si está apagada, ese correo simplemente no se envía para esa municipalidad.</li>
+      </ul>
+      <div class="callout tip">
+        <span class="icon">✉️</span>
+        <div><strong>El correo es un aviso, no un requisito</strong>Si el envío de correo está deshabilitado o falla, la emergencia y su seguimiento funcionan igual dentro del sistema.</div>
+      </div>
+    </section>
+
+    <section class="sec" id="auditoria">
+      <h2>9. Auditoría <span class="route">/admin/auditoria</span> <span class="badge solo">Solo Super Admin</span></h2>
+      <p class="sec-sub">Registro de seguridad global e independiente del historial de cada emergencia: no se borra aunque se elimine una emergencia.</p>
+      <ul>
+        <li>Incluye eventos como inicios de sesión fallidos, bloqueos por exceso de intentos, emergencias eliminadas y correos enviados o fallidos.</li>
+        <li>Filtrable por tipo de evento, con paginado de 50 registros.</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="enlaces">
+      <h2>10. Enlaces públicos que puedes compartir</h2>
+      <p class="sec-sub">Estos enlaces no requieren iniciar sesión; puedes difundirlos en redes, avisos municipales o folletería.</p>
+      <ul class="linklist">
+        <li><span class="route">/reportar</span><span class="desc">Formulario ciudadano general (pide región y comuna).</span></li>
+        <li><span class="route">/reportar/tu-slug</span><span class="desc">Recomendado: precompleta tu municipalidad y oculta región/comuna.</span></li>
+        <li><span class="route">/consulta</span><span class="desc">Consulta pública de estado por código de seguimiento.</span></li>
+        <li><span class="route">/mapa-publico</span><span class="desc">Mapa público con desplegable para elegir municipalidad.</span></li>
+        <li><span class="route">/mapa-publico/tu-slug</span><span class="desc">Mapa público centrado directamente en tu municipalidad.</span></li>
+      </ul>
+    </section>
+
+    <section class="sec" id="practicas">
+      <h2>11. Buenas prácticas</h2>
+      <ul>
+        <li>No compartas tu contraseña ni dejes tu sesión abierta en equipos compartidos.</li>
+        <li>Al desvincular a alguien de la institución, <strong>desactiva</strong> su usuario; reserva la eliminación (Super Admin) para casos excepcionales.</li>
+        <li>Usa el rol Visualizador por defecto para quien solo necesita seguimiento — protege los datos de contacto de los reportantes.</li>
+        <li>Super Admin: revisa la auditoría periódicamente para detectar intentos de acceso anómalos.</li>
+      </ul>
+      <div class="callout danger">
+        <span class="icon">🚨</span>
+        <div><strong>El sistema no reemplaza a los servicios de emergencia</strong>Es una herramienta de gestión y seguimiento. Ante riesgo vital inmediato, siempre deriva a Carabineros (133), Bomberos (132) o SAMU (131).</div>
+      </div>
+    </section>
+
+    <footer class="doc">
+      AlertaComunal — Manual de Administrador · Documento interno para personal municipal.
+    </footer>
+  </main>
+</div>
+</body>
+</html>

@@ -147,6 +147,25 @@ export default async function Home() {
       </main>
 
       <footer className="text-center py-6 text-slate-600 text-xs border-t border-white/5">
+        <div className="mb-3 flex items-center justify-center gap-4">
+          <a
+            href="/manual-administrador.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-400 hover:text-blue-400 underline"
+          >
+            Manual de Administrador
+          </a>
+          <span className="text-slate-700">·</span>
+          <a
+            href="/manual-usuario-publico.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-400 hover:text-blue-400 underline"
+          >
+            Guía para reportar emergencias
+          </a>
+        </div>
         AlertaComunal — Sistema Municipal de Gestión de Emergencias
       </footer>
     </div>

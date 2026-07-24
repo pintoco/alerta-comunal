@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AlertaComunal — Cómo reportar y hacer seguimiento a una emergencia</title>
+<style>
+  :root {
+    --paper: #f3f5f8;
+    --surface: #ffffff;
+    --surface-2: #eef1f6;
+    --ink: #12182b;
+    --ink-soft: #4b5567;
+    --muted: #6b7686;
+    --line: #dde3ec;
+    --line-soft: #e8ecf3;
+    --brand: #2554e0;
+    --brand-ink: #16327a;
+    --brand-tint: #e9eefd;
+    --deep: #0f1b33;
+
+    --ok: #157f4a;
+    --ok-tint: #e4f6ec;
+    --warn: #a15c07;
+    --warn-tint: #fdf1e0;
+    --danger: #b3261e;
+    --danger-tint: #fbe9e8;
+    --info: #0b6e85;
+    --info-tint: #e3f4f7;
+
+    --serif: ui-serif, Iowan Old Style, Sitka Text, Georgia, "Times New Roman", serif;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, ui-sans-serif, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(15, 27, 51, 0.04), 0 6px 20px -8px rgba(15, 27, 51, 0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b1120; --surface: #121a2e; --surface-2: #182238;
+      --ink: #e8ecf5; --ink-soft: #b7c0d4; --muted: #8b96ac;
+      --line: #263356; --line-soft: #1d2944;
+      --brand: #6f93ff; --brand-ink: #cddcff; --brand-tint: #16244a; --deep: #060a16;
+      --ok: #6bd6a0; --ok-tint: #10301f; --warn: #f0b558; --warn-tint: #33260c;
+      --danger: #ff8b83; --danger-tint: #3a1414; --info: #7fd6e8; --info-tint: #0f2c33;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0b1120; --surface: #121a2e; --surface-2: #182238;
+    --ink: #e8ecf5; --ink-soft: #b7c0d4; --muted: #8b96ac;
+    --line: #263356; --line-soft: #1d2944;
+    --brand: #6f93ff; --brand-ink: #cddcff; --brand-tint: #16244a; --deep: #060a16;
+    --ok: #6bd6a0; --ok-tint: #10301f; --warn: #f0b558; --warn-tint: #33260c;
+    --danger: #ff8b83; --danger-tint: #3a1414; --info: #7fd6e8; --info-tint: #0f2c33;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  :root[data-theme="light"] {
+    --paper: #f3f5f8; --surface: #ffffff; --surface-2: #eef1f6;
+    --ink: #12182b; --ink-soft: #4b5567; --muted: #6b7686;
+    --line: #dde3ec; --line-soft: #e8ecf3;
+    --brand: #2554e0; --brand-ink: #16327a; --brand-tint: #e9eefd; --deep: #0f1b33;
+    --ok: #157f4a; --ok-tint: #e4f6ec; --warn: #a15c07; --warn-tint: #fdf1e0;
+    --danger: #b3261e; --danger-tint: #fbe9e8; --info: #0b6e85; --info-tint: #e3f4f7;
+    --shadow: 0 1px 2px rgba(15, 27, 51, 0.04), 0 6px 20px -8px rgba(15, 27, 51, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; text-wrap: balance; color: var(--ink); }
+  a { color: var(--brand); }
+  code, .mono { font-family: var(--mono); }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--deep);
+    color: #dbe4ff;
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+    box-shadow: var(--shadow);
+  }
+  .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.01em; }
+  .topbar .brand .mark {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--brand);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .topbar .tag {
+    font-size: 12px; color: #9db2ea; font-family: var(--sans);
+    border: 1px solid rgba(157,178,234,0.35); padding: 3px 10px; border-radius: 999px;
+  }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 240px minmax(0, 700px);
+    gap: 48px;
+    padding: 40px 24px 96px;
+    justify-content: center;
+  }
+
+  nav.toc {
+    position: sticky;
+    top: 76px;
+    align-self: start;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+  nav.toc p.label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+  nav.toc li { counter-increment: toc; margin-bottom: 2px; }
+  nav.toc a {
+    display: flex; gap: 10px; align-items: baseline;
+    text-decoration: none; color: var(--ink-soft);
+    font-size: 13.5px; padding: 6px 10px; border-radius: 7px;
+    transition: background 0.12s, color 0.12s;
+  }
+  nav.toc a::before {
+    content: counter(toc);
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    width: 16px; flex-shrink: 0;
+  }
+  nav.toc a:hover { background: var(--surface-2); color: var(--ink); }
+
+  main.content { min-width: 0; }
+
+  .titleblock { margin-bottom: 40px; }
+  .eyebrow {
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--brand); margin: 0 0 10px;
+  }
+  .titleblock h1 { font-size: 2.3rem; line-height: 1.15; margin: 0 0 14px; }
+  .titleblock .lede { font-size: 1.05rem; color: var(--ink-soft); margin: 0 0 18px; max-width: 60ch; }
+
+  .emergencybar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: var(--danger-tint); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+    color: color-mix(in srgb, var(--danger) 82%, var(--ink));
+    padding: 12px 16px; border-radius: var(--radius); font-size: 13.5px; margin-bottom: 8px;
+  }
+  .emergencybar strong { color: inherit; }
+  .emergencybar .nums { display: flex; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-weight: 700; }
+  .emergencybar .nums span { background: var(--surface); border: 1px solid var(--line); padding: 2px 8px; border-radius: 6px; }
+
+  section.sec { padding-top: 40px; margin-top: 40px; border-top: 1px solid var(--line-soft); scroll-margin-top: 84px; }
+  section.sec:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  .sec h2 { font-size: 1.45rem; margin: 0 0 6px; scroll-margin-top: 84px; }
+  .sec .sec-sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .sec h3 { font-size: 1.05rem; margin: 24px 0 10px; }
+  .sec p { color: var(--ink-soft); }
+
+  .route {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--brand-ink);
+    background: var(--brand-tint); border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
+    padding: 2px 9px; border-radius: 6px;
+  }
+
+  ol.steps { counter-reset: step; padding-left: 0; margin: 16px 0; }
+  ol.steps li {
+    list-style: none; counter-increment: step;
+    display: grid; grid-template-columns: 32px 1fr; gap: 14px;
+    margin-bottom: 16px; font-size: 15px; color: var(--ink-soft);
+  }
+  ol.steps li::before {
+    content: counter(step);
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    color: var(--brand); background: var(--brand-tint);
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  ol.steps strong { color: var(--ink); }
+
+  .waygrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 18px 0; }
+  @media (max-width: 700px) { .waygrid { grid-template-columns: 1fr; } }
+  .waycard {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; box-shadow: var(--shadow); text-align: left;
+  }
+  .waycard .emoji { font-size: 22px; margin-bottom: 8px; display: block; }
+  .waycard h4 { margin: 0 0 6px; font-family: var(--sans); font-size: 14px; font-weight: 700; }
+  .waycard p { margin: 0; font-size: 13px; color: var(--ink-soft); }
+
+  .callout {
+    border-radius: var(--radius); padding: 14px 16px; margin: 16px 0;
+    font-size: 13.5px; border: 1px solid transparent; display: flex; gap: 10px;
+  }
+  .callout .icon { flex-shrink: 0; margin-top: 1px; }
+  .callout.tip { background: var(--info-tint); color: color-mix(in srgb, var(--info) 80%, var(--ink)); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+  .callout.warn { background: var(--warn-tint); color: color-mix(in srgb, var(--warn) 80%, var(--ink)); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+  .callout.danger { background: var(--danger-tint); color: color-mix(in srgb, var(--danger) 80%, var(--ink)); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+  .callout.ok { background: var(--ok-tint); color: color-mix(in srgb, var(--ok) 80%, var(--ink)); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+  .callout strong { display:block; margin-bottom:2px; }
+
+  .code-preview {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 18px 20px; margin: 16px 0;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .code-preview .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; }
+  .code-preview .code { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--brand-ink); }
+
+  .faq { margin: 12px 0; }
+  .faq details {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 4px 16px; margin-bottom: 10px; box-shadow: var(--shadow);
+  }
+  .faq summary {
+    cursor: pointer; padding: 12px 0; font-weight: 600; font-size: 14.5px;
+    list-style: none; display: flex; justify-content: space-between; align-items: center;
+  }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: '+'; font-size: 18px; color: var(--muted); font-weight: 400; }
+  .faq details[open] summary::after { content: '–'; }
+  .faq p { margin: 0 0 14px; font-size: 13.5px; color: var(--ink-soft); }
+
+  .statuslegend { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+  .statuslegend span {
+    font-size: 12.5px; padding: 4px 10px; border-radius: 999px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .s-nueva { background: var(--brand-tint); color: var(--brand-ink); }
+  .s-atencion { background: var(--warn-tint); color: var(--warn); }
+  .s-resuelta { background: var(--ok-tint); color: var(--ok); }
+  .s-cerrada { background: var(--surface-2); color: var(--muted); }
+  .s-descartada { background: var(--danger-tint); color: var(--danger); }
+
+  footer.doc { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 12.5px; }
+
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+    nav.toc { position: static; max-height: none; margin-bottom: 8px; }
+    nav.toc ol { display: flex; flex-wrap: wrap; gap: 4px; }
+    nav.toc a { padding: 5px 9px; }
+  }
+
+  @media print {
+    .topbar, nav.toc { display: none; }
+    .shell { grid-template-columns: 1fr; padding: 0; }
+    body { background: white; }
+    section.sec { break-inside: avoid-page; }
+    a { color: inherit; text-decoration: none; }
+    .faq details { border: 1px solid #ccc; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+    </span>
+    AlertaComunal
+  </div>
+  <span class="tag">Guía para vecinos y vecinas</span>
+</div>
+
+<div class="shell">
+  <nav class="toc">
+    <p class="label">Contenido</p>
+    <ol>
+      <li><a href="#que-es">Qué es AlertaComunal</a></li>
+      <li><a href="#reportar">Cómo reportar</a></li>
+      <li><a href="#ubicacion">Indicar tu ubicación</a></li>
+      <li><a href="#foto">Agregar una foto</a></li>
+      <li><a href="#codigo">Tu código de seguimiento</a></li>
+      <li><a href="#consultar">Consultar tu reporte</a></li>
+      <li><a href="#mapa">Mapa de emergencias</a></li>
+      <li><a href="#faq">Preguntas frecuentes</a></li>
+    </ol>
+  </nav>
+
+  <main class="content">
+    <div class="titleblock">
+      <p class="eyebrow">AlertaComunal</p>
+      <h1>Cómo reportar y hacer seguimiento a una emergencia</h1>
+      <p class="lede">Guía simple para vecinos y vecinas: reportar una emergencia comunal, agregar su ubicación y consultar el estado más tarde. No necesitas cuenta ni contraseña.</p>
+    </div>
+
+    <div class="emergencybar">
+      <strong>⚠ ¿Riesgo para la vida ahora mismo?</strong>
+      No uses este formulario: llama directo.
+      <span class="nums"><span>Carabineros 133</span><span>Bomberos 132</span><span>SAMU 131</span></span>
+    </div>
+
+    <section class="sec" id="que-es">
+      <h2>1. Qué es AlertaComunal</h2>
+      <p>Es la plataforma que usa tu municipalidad para recibir y hacer seguimiento a emergencias comunales: cortes de electricidad, árboles caídos, daños en la vía pública, inundaciones, accidentes y más. Cualquier persona puede reportar, sin crear una cuenta.</p>
+    </section>
+
+    <section class="sec" id="reportar">
+      <h2>2. Cómo reportar una emergencia</h2>
+      <p class="sec-sub">Formulario público, disponible en <span class="route">/reportar</span> o en el enlace específico de tu municipalidad (por ejemplo <span class="route">/reportar/tu-comuna</span>).</p>
+      <ol class="steps">
+        <li>Abre el enlace de reporte que te dio tu municipalidad, o entra a <span class="route">/reportar</span> si no tienes uno específico.</li>
+        <li>Completa <strong>tus datos</strong>: nombre completo y teléfono de contacto, por si necesitan más información.</li>
+        <li>Elige el <strong>tipo de emergencia</strong> (incendio, inundación, caída de árbol, corte de camino, corte eléctrico, daño en vivienda, emergencia social, accidente, riesgo sanitario, infraestructura pública u otro) y describe la situación con el mayor detalle posible.</li>
+        <li>Si entraste por el enlace general, selecciona tu <strong>región y comuna</strong>. Si entraste por el enlace de tu municipalidad, este paso no aparece.</li>
+        <li>Indica la <strong>dirección exacta</strong> (ver sección siguiente) y, si quieres, el sector o barrio.</li>
+        <li>Si tienes una <strong>foto</strong> del incidente, súbela — es opcional.</li>
+        <li>Presiona <strong>Enviar reporte de emergencia</strong> y guarda el código que aparece en pantalla.</li>
+      </ol>
+    </section>
+
+    <section class="sec" id="ubicacion">
+      <h2>3. Indicar tu ubicación exacta</h2>
+      <p class="sec-sub">Puedes usar cualquiera de estas tres formas — no necesitas usarlas todas.</p>
+      <div class="waygrid">
+        <div class="waycard">
+          <span class="emoji">⌨️</span>
+          <h4>Escribir la dirección</h4>
+          <p>Empieza a tipear y elige una de las sugerencias reales que aparecen en la lista.</p>
+        </div>
+        <div class="waycard">
+          <span class="emoji">📍</span>
+          <h4>Botón GPS</h4>
+          <p>Usa la ubicación de tu teléfono o computador. El navegador te pedirá permiso la primera vez.</p>
+        </div>
+        <div class="waycard">
+          <span class="emoji">🖐️</span>
+          <h4>Arrastrar el pin</h4>
+          <p>En el mini-mapa bajo el campo de dirección, arrastra el punto azul al lugar exacto.</p>
+        </div>
+      </div>
+      <div class="callout tip">
+        <span class="icon">📱</span>
+        <div><strong>Si abriste el enlace desde Instagram, Facebook o WhatsApp</strong>El GPS puede fallar por restricciones del navegador interno de esas apps. Abre el enlace directamente en Chrome o Safari para mejores resultados.</div>
+      </div>
+    </section>
+
+    <section class="sec" id="foto">
+      <h2>4. Agregar una foto (opcional)</h2>
+      <p>Una fotografía ayuda al personal municipal a evaluar la situación más rápido, pero no es obligatoria. Formatos aceptados: <strong>jpg, png o webp</strong>, hasta <strong>5 MB</strong>.</p>
+    </section>
+
+    <section class="sec" id="codigo">
+      <h2>5. Tu código de seguimiento</h2>
+      <p>Al enviar el reporte verás una pantalla de confirmación con un código único. Guárdalo: es la única forma de consultar el estado de tu reporte más adelante.</p>
+      <div class="code-preview">
+        <div>
+          <p class="label">Código de seguimiento</p>
+          <p class="code">EMG-2026-0001</p>
+        </div>
+        <span class="route">Guárdalo o haz una captura de pantalla</span>
+      </div>
+    </section>
+
+    <section class="sec" id="consultar">
+      <h2>6. Consultar el estado de tu reporte</h2>
+      <p class="sec-sub">En <span class="route">/consulta</span>, sin necesidad de iniciar sesión.</p>
+      <ol class="steps">
+        <li>Ingresa tu código de seguimiento (ej. <span class="route">EMG-2026-0001</span>).</li>
+        <li>Verás el tipo de emergencia, estado actual, prioridad, dirección, fecha de reporte y, si ya se resolvió, las observaciones de cierre.</li>
+      </ol>
+      <p class="sec-sub" style="margin-top:6px;">Posibles estados de tu reporte:</p>
+      <div class="statuslegend">
+        <span class="s-nueva">● Nueva</span>
+        <span class="s-atencion">● En atención</span>
+        <span class="s-resuelta">● Resuelta</span>
+        <span class="s-cerrada">● Cerrada</span>
+        <span class="s-descartada">● Descartada</span>
+      </div>
+      <div class="callout tip">
+        <span class="icon">🔒</span>
+        <div><strong>Privacidad</strong>Solo puedes ver tu propio reporte con su código exacto. No se muestran datos de otros reportes ni información interna del municipio.</div>
+      </div>
+    </section>
+
+    <section class="sec" id="mapa">
+      <h2>7. Mapa de emergencias activas</h2>
+      <p class="sec-sub">En <span class="route">/mapa-publico</span>, muestra las emergencias activas (nuevas o en atención) de tu municipalidad.</p>
+      <ul>
+        <li>Los marcadores se colorean según prioridad: verde (baja), amarillo (media), naranjo (alta) y rojo (crítica).</li>
+        <li>Si hay más de una municipalidad disponible, elige la tuya en el desplegable — el mapa se centra automáticamente en esa comuna.</li>
+        <li>Solo se muestran emergencias con ubicación registrada; no se publican nombres ni teléfonos de quienes reportan.</li>
+      </ul>
+    </section>
+
+    <section class="sec" id="faq">
+      <h2>8. Preguntas frecuentes</h2>
+      <div class="faq">
+        <details>
+          <summary>¿Necesito crear una cuenta para reportar?</summary>
+          <p>No. El formulario es completamente público y no requiere registro ni contraseña.</p>
+        </details>
+        <details>
+          <summary>¿Tiene algún costo?</summary>
+          <p>No, reportar y hacer seguimiento es gratuito.</p>
+        </details>
+        <details>
+          <summary>¿Es obligatorio usar el GPS o subir una foto?</summary>
+          <p>No. Ambos son opcionales. Basta con escribir la dirección exacta para que tu reporte quede registrado correctamente.</p>
+        </details>
+        <details>
+          <summary>¿Quién ve mi nombre y teléfono?</summary>
+          <p>Solo el personal municipal a cargo de atender emergencias. No aparecen en el mapa público ni en la consulta de estado.</p>
+        </details>
+        <details>
+          <summary>¿Cuánto tarda la respuesta?</summary>
+          <p>Depende de la prioridad de la emergencia y la disponibilidad de tu municipalidad. Usa la consulta de estado con tu código para seguir el avance.</p>
+        </details>
+        <details>
+          <summary>Perdí mi código de seguimiento, ¿qué hago?</summary>
+          <p>Contacta directamente a tu municipalidad indicando la fecha, dirección y descripción del reporte para que puedan ubicarlo.</p>
+        </details>
+      </div>
+    </section>
+
+    <footer class="doc">
+      AlertaComunal — Guía ciudadana. Para emergencias de riesgo vital, llama siempre a Carabineros (133), Bomberos (132) o SAMU (131).
+    </footer>
+  </main>
+</div>
+</body>
+</html>
