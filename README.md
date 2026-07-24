@@ -131,6 +131,7 @@ Con los valores por defecto (2× `t3.small`, `db.t4g.micro` sin Multi-AZ, `cache
 - Exportación CSV con filtros activos; PII oculto para VISUALIZADOR
 - Filtros avanzados: estado, prioridad, tipo, sector, rango de fechas, texto libre
 - Notificaciones por correo (Resend) con preferencias configurables por usuario
+- **Webhooks configurables por municipalidad** (`/admin/municipalidades/[id]/webhook`) — notificaciones HTTP firmadas (HMAC-SHA256) hacia sistemas externos al crear una emergencia, asignar responsable o recibir un reporte ciudadano
 - **Panel de auditoría de seguridad** (`/admin/auditoria`) — log permanente de eventos críticos del sistema
 - **Panel de uso por municipalidad** — 6 KPIs, distribución por tipo, emergencias recientes
 - Validación de usuario activo en cada request — bloqueo inmediato sin esperar expiración JWT
@@ -175,6 +176,7 @@ Disponible solo para `SUPER_ADMIN`. Incluye:
 - **Municipalidades** (`/admin/municipalidades`): listado con emergencias activas por municipio, crear, editar, activar/desactivar
 - **Detalle de municipalidad** (`/admin/municipalidades/[id]`): 6 KPIs operacionales, distribución por tipo de emergencia, emergencias recientes, gestión de usuarios
 - **Plantillas de correo** (`/admin/municipalidades/[id]/templates`): asunto y cuerpo HTML personalizables por municipalidad para los correos de asignación y de nuevo reporte ciudadano, con variables `{{code}}`, `{{type}}`, `{{link}}`, etc.
+- **Webhook** (`/admin/municipalidades/[id]/webhook`): URL propia por municipalidad, firmada con HMAC-SHA256, con toggle por evento (creación, asignación, nuevo reporte) y botón de prueba
 - **Usuarios** (`/admin/usuarios`): listado global, crear, editar rol/municipalidad, activar/desactivar, cambiar contraseña, **eliminar** (solo SUPER_ADMIN)
 - **Auditoría** (`/admin/auditoria`): log permanente de eventos de seguridad — EMERGENCY_DELETED, LOGIN_FAILED, RATE_LIMIT_HIT, EMAIL_SENT/FAILED; filtrable y paginado
 
@@ -418,7 +420,8 @@ alerta-comunal/
 ├── ecosystem.config.js        # Configuración PM2 (cluster mode) para EC2
 ├── prisma/
 │   ├── schema.prisma          # Modelos: Municipality, User, Emergency, Task, Evidence,
-│   │                          # EmergencyCoAssignee, MunicipalityEmailTemplate, ActivityLog, AuditLog
+│   │                          # EmergencyCoAssignee, MunicipalityEmailTemplate, MunicipalityWebhook,
+│   │                          # ActivityLog, AuditLog
 │   ├── migrations/
 │   └── seed.ts                # Admin + operadores + municipalidad demo + emergencias de ejemplo
 ├── public/
@@ -435,7 +438,7 @@ alerta-comunal/
 │   │   │   ├── municipios-publicos/ # GET municipalidades activas (público)
 │   │   │   ├── dashboard/           # stats/ (KPIs snapshot) + stream/ (SSE tiempo real)
 │   │   │   ├── health/              # Healthcheck para el target group del ALB
-│   │   │   └── admin/               # CRUD municipalidades, usuarios, plantillas y audit-log
+│   │   │   └── admin/               # CRUD municipalidades, usuarios, plantillas, webhook y audit-log
 │   │   ├── dashboard/          # Dashboard con estadísticas en tiempo real
 │   │   ├── emergencias/         # Listado, nueva, detalle, editar, reporte PDF
 │   │   ├── mapa/                # Mapa interactivo interno (requiere login)
@@ -459,6 +462,7 @@ alerta-comunal/
 │   │   ├── config.ts             # Configuración centralizada
 │   │   ├── dashboard.ts
 │   │   ├── email.ts              # Resend + plantillas por municipalidad
+│   │   ├── webhooks.ts           # sendWebhook() — firma HMAC, guardia SSRF, sin reintentos
 │   │   ├── permissions.ts        # requireAuth, requireRole, requireSuperAdmin, requireUserAdmin
 │   │   ├── tenant.ts             # getMunicipalityFilter, getEmergencyScope, requireEmergencyAccess
 │   │   ├── rate-limit.ts         # Redis/memoria con fallback automático
@@ -530,6 +534,30 @@ MAX_UPLOAD_SIZE_MB=5
 
 Cada municipalidad puede personalizar asunto y cuerpo de ambas plantillas desde `/admin/municipalidades/[id]/templates` (solo SUPER_ADMIN). Si el envío falla, la emergencia se crea igual y queda registrado `EMAIL_FAILED` en el `ActivityLog`.
 
+## Webhooks por municipalidad
+
+Cada municipalidad puede configurar **una URL propia** (`/admin/municipalidades/[id]/webhook`, solo SUPER_ADMIN) para recibir notificaciones HTTP en su propio sistema (mesa de ayuda, Slack, ERP municipal), en paralelo al correo — no lo reemplaza.
+
+### Eventos disponibles
+
+| Evento | Se dispara en |
+|---|---|
+| `EMERGENCY_CREATED` | Al crear una emergencia (interna o ciudadana) — `POST /api/emergencias` |
+| `EMERGENCY_ASSIGNED` | Al asignar o reasignar el responsable principal — `POST`/`PUT /api/emergencias[/[id]]` |
+| `NEW_CITIZEN_REPORT` | Al recibir un reporte desde el formulario público — `POST /api/reporte-publico` |
+
+Cada evento se puede activar/desactivar de forma independiente (`onEmergencyCreated`, `onAssignment`, `onNewCitizenReport`), además de un interruptor general `enabled`.
+
+### Seguridad del payload
+
+- La URL debe ser `https://` y no puede apuntar a un host privado/local (`localhost`, `169.254.169.254`, rangos `10.*`/`172.16-31.*`/`192.168.*`) — validado tanto al guardar como al enviar.
+- Cada envío incluye el header `X-AlertaComunal-Signature: sha256=<hmac>`, un HMAC-SHA256 del cuerpo JSON crudo calculado con un secreto único por municipalidad (`MunicipalityWebhook.secret`, generado con `crypto.randomBytes(32)`), más `X-AlertaComunal-Event: <evento>`. El municipio debe verificar la firma antes de confiar en el payload.
+- El secreto se puede regenerar desde la UI (invalida el anterior).
+- Un solo intento por evento, timeout de 5 segundos, **sin reintentos** — si falla, se registra `WEBHOOK_FAILED` en el `ActivityLog` de la emergencia y en `/admin/auditoria`, pero la operación principal (crear/asignar/reportar) nunca se bloquea ni falla por esto.
+- Botón "Enviar prueba" en la UI para verificar la integración sin esperar un evento real (`POST /api/admin/municipalidades/[id]/webhook/test`).
+
+Implementación en `src/lib/webhooks.ts` (`sendWebhook`), modelo `MunicipalityWebhook` en `prisma/schema.prisma`.
+
 ## Roadmap
 
 ### Completado
@@ -557,10 +585,10 @@ Cada municipalidad puede personalizar asunto y cuerpo de ambas plantillas desde 
 - [x] **Infraestructura AWS completa como código** (Terraform): VPC multi-AZ, ALB + Auto Scaling Group, RDS, ElastiCache, S3, WAF, CloudWatch + SNS, IAM de mínimo privilegio, SSM Parameter Store para secretos
 - [x] **Healthcheck dedicado** (`/api/health`) como target del ALB
 - [x] **WAF ajustado** para no bloquear reportes ciudadanos con foto (`SizeRestrictions_BODY`)
+- [x] **Webhooks configurables por municipalidad** — notificaciones HTTP firmadas (HMAC-SHA256) a sistemas externos
 
 ### Corto plazo (próximos sprints)
 
-- [ ] Webhooks configurables por municipalidad — notificaciones HTTP a sistemas externos
 - [ ] Rotar la access key AWS usada durante el setup inicial de Terraform
 - [ ] Retirar el acceso SSH/EC2 Instance Connect de depuración una vez terminadas las pruebas en producción
 

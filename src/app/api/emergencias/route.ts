@@ -6,6 +6,7 @@ import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { getMunicipalityFilter, requireMunicipalityAssigned } from '@/lib/tenant'
 import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
+import { sendWebhook } from '@/lib/webhooks'
 import { writeAuditLog } from '@/lib/audit'
 
 export async function GET(request: Request) {
@@ -177,6 +178,49 @@ export async function POST(request: Request) {
       },
     })
 
+    if (municipalityId) {
+      const webhookResult = await sendWebhook(municipalityId, 'EMERGENCY_CREATED', {
+        municipality: { id: municipalityId },
+        emergency: {
+          id: emergency.id,
+          code: emergency.code,
+          type: emergency.type,
+          priority: emergency.priority,
+          status: emergency.status,
+          origin: emergency.origin,
+          region: emergency.region,
+          commune: emergency.commune,
+          address: emergency.address,
+          sector: emergency.sector,
+          description: emergency.description,
+          reporterName: emergency.reporterName,
+          reporterPhone: emergency.reporterPhone,
+          createdAt: emergency.createdAt,
+        },
+      })
+      if (!webhookResult.skipped) {
+        await prisma.activityLog.create({
+          data: {
+            emergencyId: emergency.id,
+            userId: session.id,
+            action: webhookResult.success ? 'WEBHOOK_SENT' : 'WEBHOOK_FAILED',
+            description: webhookResult.success
+              ? 'Webhook de la municipalidad notificado (emergencia creada).'
+              : `No se pudo notificar el webhook de la municipalidad: ${webhookResult.error}`,
+          },
+        })
+        await writeAuditLog({
+          action: webhookResult.success ? 'WEBHOOK_SENT' : 'WEBHOOK_FAILED',
+          entityType: 'EMERGENCY',
+          entityId: emergency.id,
+          entityLabel: emergency.code,
+          userId: session.id,
+          userName: session.name,
+          metadata: { event: 'EMERGENCY_CREATED', error: webhookResult.error },
+        })
+      }
+    }
+
     // Crear co-asignados
     const validCoAssigneeIds = coAssigneeIds.filter(
       (id) => id !== data.assignedToId && id.length > 0,
@@ -257,6 +301,46 @@ export async function POST(request: Request) {
         }
       } catch (emailErr) {
         console.error('[emergencias] Error al enviar correo de asignación:', emailErr)
+      }
+    }
+
+    // Webhook de asignación al crear (independiente de si el correo está habilitado)
+    if (municipalityId && data.assignedToId) {
+      const webhookResult = await sendWebhook(municipalityId, 'EMERGENCY_ASSIGNED', {
+        municipality: { id: municipalityId },
+        emergency: {
+          id: emergency.id,
+          code: emergency.code,
+          type: emergency.type,
+          priority: emergency.priority,
+          status: emergency.status,
+          address: emergency.address,
+          sector: emergency.sector,
+          description: emergency.description,
+        },
+        assignedToId: data.assignedToId,
+        assignedByName: session.name,
+      })
+      if (!webhookResult.skipped) {
+        await prisma.activityLog.create({
+          data: {
+            emergencyId: emergency.id,
+            userId: session.id,
+            action: webhookResult.success ? 'WEBHOOK_SENT' : 'WEBHOOK_FAILED',
+            description: webhookResult.success
+              ? 'Webhook de la municipalidad notificado (responsable asignado).'
+              : `No se pudo notificar el webhook de asignación: ${webhookResult.error}`,
+          },
+        })
+        await writeAuditLog({
+          action: webhookResult.success ? 'WEBHOOK_SENT' : 'WEBHOOK_FAILED',
+          entityType: 'EMERGENCY',
+          entityId: emergency.id,
+          entityLabel: emergency.code,
+          userId: session.id,
+          userName: session.name,
+          metadata: { event: 'EMERGENCY_ASSIGNED', error: webhookResult.error },
+        })
       }
     }
 

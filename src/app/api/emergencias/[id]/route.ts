@@ -4,6 +4,7 @@ import { emergencySchema } from '@/lib/validations/emergency'
 import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
+import { sendWebhook } from '@/lib/webhooks'
 import { deleteUpload } from '@/lib/storage'
 import { writeAuditLog } from '@/lib/audit'
 
@@ -271,6 +272,46 @@ export async function PUT(
         }
       } catch (emailErr) {
         console.error('[emergencias] Error al enviar correo de reasignación:', emailErr)
+      }
+    }
+
+    // Webhook de asignación si el responsable cambió a alguien nuevo
+    if (previous.municipalityId && data.assignedToId && data.assignedToId !== previous.assignedToId) {
+      const webhookResult = await sendWebhook(previous.municipalityId, 'EMERGENCY_ASSIGNED', {
+        municipality: { id: previous.municipalityId },
+        emergency: {
+          id: emergency.id,
+          code: emergency.code,
+          type: emergency.type,
+          priority: emergency.priority,
+          status: emergency.status,
+          address: emergency.address,
+          sector: emergency.sector,
+          description: emergency.description,
+        },
+        assignedToId: data.assignedToId,
+        assignedByName: session.name,
+      })
+      if (!webhookResult.skipped) {
+        await prisma.activityLog.create({
+          data: {
+            emergencyId: id,
+            userId: session.id,
+            action: webhookResult.success ? 'WEBHOOK_SENT' : 'WEBHOOK_FAILED',
+            description: webhookResult.success
+              ? 'Webhook de la municipalidad notificado (responsable reasignado).'
+              : `No se pudo notificar el webhook de reasignación: ${webhookResult.error}`,
+          },
+        })
+        await writeAuditLog({
+          action: webhookResult.success ? 'WEBHOOK_SENT' : 'WEBHOOK_FAILED',
+          entityType: 'EMERGENCY',
+          entityId: emergency.id,
+          entityLabel: emergency.code,
+          userId: session.id,
+          userName: session.name,
+          metadata: { event: 'EMERGENCY_ASSIGNED', error: webhookResult.error },
+        })
       }
     }
 

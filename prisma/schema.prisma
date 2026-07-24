@@ -73,6 +73,7 @@ model Municipality {
   users          User[]
   emergencies    Emergency[]
   emailTemplates MunicipalityEmailTemplate[]
+  webhook        MunicipalityWebhook?
 }
 
 model User {
@@ -201,6 +202,23 @@ model MunicipalityEmailTemplate {
 
   @@unique([municipalityId, type])
   @@index([municipalityId])
+}
+
+// Un webhook por municipalidad (no uno por tipo de evento, a diferencia de
+// MunicipalityEmailTemplate) — un único endpoint que se suscribe a los
+// eventos que la municipalidad decida vía los flags on*.
+model MunicipalityWebhook {
+  id                 String   @id @default(cuid())
+  municipalityId     String   @unique
+  url                String
+  secret             String
+  enabled            Boolean  @default(true)
+  onEmergencyCreated Boolean  @default(true)
+  onNewCitizenReport Boolean  @default(true)
+  onAssignment       Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  municipality        Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
 }
 
 // Audit log global — sin FK para que no se elimine en cascada.

@@ -9,6 +9,7 @@ import {
   sendMunicipalityNewReportEmail,
   isEmailEnabled,
 } from '@/lib/email'
+import { sendWebhook } from '@/lib/webhooks'
 import { checkRateLimit, getClientIpFromRequest } from '@/lib/rate-limit'
 
 // ─── GET /api/reporte-publico?code=EMG-XXXX-XXXX ─────────────────────────────
@@ -336,6 +337,42 @@ export async function POST(request: Request) {
         }
       } catch (emailErr) {
         console.error('[reporte-publico] Error inesperado al enviar correo:', emailErr)
+      }
+    }
+
+    // ── Notificar por webhook a la municipalidad (independiente del correo) ───
+    if (municipalityId) {
+      const webhookResult = await sendWebhook(municipalityId, 'NEW_CITIZEN_REPORT', {
+        municipality: { id: municipalityId, name: municipalityName },
+        emergency: {
+          id: emergency.id,
+          code: emergency.code,
+          type: emergency.type,
+          priority: emergency.priority,
+          status: emergency.status,
+          region: emergency.region,
+          commune: emergency.commune,
+          address: emergency.address,
+          sector: emergency.sector,
+          description: emergency.description,
+          reporterName: emergency.reporterName,
+          reporterPhone: emergency.reporterPhone,
+          createdAt: emergency.createdAt,
+        },
+      })
+      if (!webhookResult.skipped) {
+        await prisma.activityLog.create({
+          data: {
+            emergencyId: emergency.id,
+            action: webhookResult.success ? 'WEBHOOK_SENT' : 'WEBHOOK_FAILED',
+            description: webhookResult.success
+              ? 'Webhook de la municipalidad notificado (nuevo reporte ciudadano).'
+              : `No se pudo notificar el webhook de nuevo reporte: ${webhookResult.error}`,
+          },
+        })
+        if (!webhookResult.success) {
+          console.error('[reporte-publico] Fallo al enviar webhook:', webhookResult.error)
+        }
       }
     }
 
