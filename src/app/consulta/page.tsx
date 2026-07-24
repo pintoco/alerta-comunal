@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { EMERGENCY_TYPE_LABELS, STATUS_LABELS, PRIORITY_LABELS, formatDate } from '@/lib/utils'
 import type { EmergencyType, EmergencyStatus, Priority } from '@/types'
 
 interface PublicEmergency {
   code: string
-  title: string
   type: EmergencyType
   status: EmergencyStatus
   priority: Priority
@@ -81,9 +81,9 @@ export default function ConsultaPage() {
               <p className="text-slate-400 text-xs">Municipalidad</p>
             </div>
           </div>
-          <a href="/reportar" className="text-slate-300 hover:text-white text-xs underline">
+          <Link href="/reportar" className="text-slate-300 hover:text-white text-xs underline">
             Enviar reporte
-          </a>
+          </Link>
         </div>
       </header>
 
@@ -196,9 +196,9 @@ export default function ConsultaPage() {
         <div className="mt-8 text-center">
           <p className="text-xs text-gray-400">
             ¿No tiene código?{' '}
-            <a href="/reportar" className="text-blue-600 hover:underline">
+            <Link href="/reportar" className="text-blue-600 hover:underline">
               Envíe un reporte
-            </a>
+            </Link>
           </p>
         </div>
       </div>

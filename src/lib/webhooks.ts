@@ -28,7 +28,9 @@ function signPayload(body: string, secret: string): string {
 // destino del webhook lo define un SUPER_ADMIN de confianza, pero igual vale
 // bloquear hosts obviamente privados/locales a nivel de aplicación.
 function isPrivateOrLocalHost(hostname: string): boolean {
-  const h = hostname.toLowerCase()
+  // URL.hostname keeps the brackets for IPv6 literals (e.g. "[::1]") — strip them
+  // before comparing, or "https://[::1]/..." silently bypasses this check.
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (h === 'localhost' || h === '127.0.0.1' || h === '169.254.169.254' || h === '::1') return true
   if (/^10\./.test(h)) return true
   if (/^192\.168\./.test(h)) return true

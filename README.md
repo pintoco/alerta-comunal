@@ -344,6 +344,9 @@ npm run dev                 # Desarrollo con hot-reload
 npm run build               # Build para producción
 npm run start               # Iniciar servidor de producción
 npm run lint                # Verificar código
+npm run test                # Tests unitarios (Vitest)
+npm run test:watch          # Tests unitarios en modo watch
+npm run test:e2e            # Smoke tests E2E (Playwright)
 npm run prisma:generate     # Generar cliente Prisma
 npm run prisma:push         # Sincronizar schema directo (solo desarrollo, sin migraciones)
 npm run prisma:migrate      # Aplicar migraciones pendientes (prisma migrate deploy)
@@ -351,6 +354,22 @@ npm run prisma:migrate:dev  # Crear nueva migración en desarrollo (prisma migra
 npm run prisma:seed         # Cargar datos de ejemplo
 npm run prisma:setup        # migrate deploy + seed (todo en uno)
 ```
+
+## Tests y CI
+
+Dos capas de prueba, ambas obligatorias antes de mergear a `main` (ver `.github/workflows/ci.yml`):
+
+- **Unitarios (Vitest, `src/**/*.test.ts`)**: cubren las cuatro superficies más sensibles del sistema — permisos por rol (`src/lib/permissions.test.ts`), aislamiento multi-tenant (`src/lib/tenant.test.ts`), validación de carga de archivos (`src/lib/storage/index.test.ts`) y el guard SSRF de webhooks (`src/lib/webhooks.test.ts`). Corren contra Prisma mockeado — no requieren una base de datos real.
+- **E2E smoke (Playwright, `e2e/*.spec.ts`)**: confirman que `/login` y `/reportar` renderizan y validan correctamente (incluido que el formulario ciudadano bloquea el envío sin aceptar el consentimiento de datos). Deliberadamente acotados a smoke tests — no ejercitan un login real ni crean emergencias, así que no dependen de datos sembrados.
+
+En GitHub Actions hay dos jobs:
+
+| Job | Qué valida |
+|---|---|
+| `test` | `npm run lint` + `npm run test` + `npm run build` — sin base de datos |
+| `e2e` | Levanta un Postgres 16 efímero, corre `prisma migrate deploy` contra él (detecta una migración rota antes de que llegue a RDS) y luego los smoke tests de Playwright |
+
+Ambos jobs son checks requeridos en `main` — un PR no se puede mergear si alguno falla.
 
 ## Deploy en Railway (alternativa sin Terraform)
 
@@ -658,12 +677,17 @@ Pasos: desplegar este servidor en cualquier lado accesible por `https://` → cr
 - [x] **PII de reportante oculta para VISUALIZADOR** en listado, detalle y reporte imprimible (antes solo aplicaba al export CSV)
 - [x] **Registro de accesos a datos sensibles** (`EMERGENCY_PII_VIEWED` en `/admin/auditoria`)
 - [x] **CAPTCHA adaptativo** (Cloudflare Turnstile) en `/reportar` ante envíos repetidos desde la misma IP
+- [x] **Suite de tests unitarios** (Vitest) sobre permisos, aislamiento multi-tenant, validación de archivos y el guard SSRF de webhooks — encontró y corrigió un bypass real (`https://[::1]/...` no era bloqueado por el guard SSRF)
+- [x] **Smoke tests E2E** (Playwright) sobre `/login` y `/reportar`
+- [x] **CI en GitHub Actions**: lint + build + tests unitarios, y un job separado que valida las migraciones de Prisma contra un Postgres efímero antes de correr los smoke tests — ambos como checks requeridos en `main`
+- [x] **Verificación real de backups**: RDS con retención de 7 días + point-in-time recovery, S3 con versionado habilitado; restauración de prueba (point-in-time) confirmada íntegra
 
 ### Corto plazo (próximos sprints)
 
 - [ ] Rotar la access key AWS usada durante el setup inicial de Terraform
 - [ ] Retirar el acceso SSH/EC2 Instance Connect de depuración una vez terminadas las pruebas en producción
 - [ ] Automatizar la política de retención de datos del reportante (job de anonimización + cron en EC2/Terraform — ver sección "Retención de datos")
+- [ ] Monitoreo/alertas de aplicación (Sentry o similar) para detectar fallos en producción sin depender de que el cliente los reporte primero
 
 ### Largo plazo
 
