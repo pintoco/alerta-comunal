@@ -98,3 +98,10 @@ resource "aws_ssm_parameter" "turnstile_secret_key" {
   type  = "SecureString"
   value = var.turnstile_secret_key
 }
+
+resource "aws_ssm_parameter" "sentry_dsn" {
+  count = var.sentry_dsn != "" ? 1 : 0
+  name  = "${local.ssm_prefix}/NEXT_PUBLIC_SENTRY_DSN"
+  type  = "SecureString"
+  value = var.sentry_dsn
+}

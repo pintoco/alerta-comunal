@@ -332,6 +332,8 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `EMAIL_ENABLED` | Activa el envío de correos. | `true` / `false` |
 | `REDIS_URL` | Conexión Redis para rate limiting distribuido. Opcional — sin ella cae a memoria in-process. | `redis://user:pass@host:6379` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile para el CAPTCHA adaptativo de `/reportar`. Opcionales — sin ambas, el CAPTCHA nunca se exige. | Crear sitio en el dashboard de Cloudflare |
+| `NEXT_PUBLIC_SENTRY_DSN` | DSN del proyecto en Sentry (monitoreo de errores). Opcional — sin ella, Sentry queda deshabilitado. | Crear proyecto en [sentry.io](https://sentry.io) |
+| `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Solo para subir source maps en el build (stack traces legibles). Opcionales — sin las tres, el build funciona igual y Sentry recibe los errores minificados. | Panel de Sentry → Settings → Auth Tokens |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_PUBLIC_URL` | Requeridas solo si `STORAGE_PROVIDER=s3`. En AWS, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` pueden omitirse: la instancia EC2 usa su IAM role automáticamente. | Ver sección Almacenamiento |
 | `NEXT_PUBLIC_DEMO_MODE` | `true` muestra el panel QuickLogin en la página principal. **No usar en producción real.** | `true` / `false` |
 
@@ -681,16 +683,17 @@ Pasos: desplegar este servidor en cualquier lado accesible por `https://` → cr
 - [x] **Smoke tests E2E** (Playwright) sobre `/login` y `/reportar`
 - [x] **CI en GitHub Actions**: lint + build + tests unitarios, y un job separado que valida las migraciones de Prisma contra un Postgres efímero antes de correr los smoke tests — ambos como checks requeridos en `main`
 - [x] **Verificación real de backups**: RDS con retención de 7 días + point-in-time recovery, S3 con versionado habilitado; restauración de prueba (point-in-time) confirmada íntegra
+- [x] **Monitoreo de errores en producción** (Sentry): captura excepciones de servidor, edge y cliente vía `instrumentation.ts`/`instrumentation-client.ts`, Session Replay solo en errores, y `error.tsx`/`global-error.tsx` conectados — opcional, se activa solo con `NEXT_PUBLIC_SENTRY_DSN`
 
 ### Corto plazo (próximos sprints)
 
 - [ ] Rotar la access key AWS usada durante el setup inicial de Terraform
 - [ ] Retirar el acceso SSH/EC2 Instance Connect de depuración una vez terminadas las pruebas en producción
 - [ ] Automatizar la política de retención de datos del reportante (job de anonimización + cron en EC2/Terraform — ver sección "Retención de datos")
-- [ ] Monitoreo/alertas de aplicación (Sentry o similar) para detectar fallos en producción sin depender de que el cliente los reporte primero
+- [ ] Crear el proyecto en sentry.io, cargar el DSN en `terraform.tfvars` y aplicar el instance refresh para activar el monitoreo en producción
 
 ### Largo plazo
 
 - [ ] Integración WhatsApp Business API (notificaciones al reportante y al ADMIN)
 - [ ] App móvil React Native para operadores en terreno
-- [ ] Monitoreo adicional (Sentry o similar) sobre las alarmas de CloudWatch ya existentes
+- [ ] Subida de source maps a Sentry en el build (`SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN`) para stack traces legibles, no solo minificados

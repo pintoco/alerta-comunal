@@ -63,3 +63,14 @@ export const turnstileConfig = {
     return !!(this.siteKey && this.secretKey)
   },
 }
+
+// Monitoreo de errores y performance (Sentry). Opcional — sin DSN configurado,
+// Sentry.init() recibe dsn: '' y queda deshabilitado (no envía nada), igual
+// que el resto de las integraciones opcionales de este archivo.
+export const sentryConfig = {
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN || '',
+  environment: process.env.SENTRY_ENVIRONMENT || (isProduction ? 'production' : 'development'),
+  get enabled() {
+    return !!this.dsn
+  },
+}

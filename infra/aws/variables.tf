@@ -189,3 +189,10 @@ variable "turnstile_secret_key" {
   default     = ""
   sensitive   = true
 }
+
+variable "sentry_dsn" {
+  description = "DSN del proyecto de Sentry (monitoreo de errores). Opcional — vacío desactiva Sentry por completo."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
