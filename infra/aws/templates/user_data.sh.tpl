@@ -35,6 +35,19 @@ CWCONFIG
   -a fetch-config -m ec2 -s \
   -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 
+# ── Swap de emergencia ────────────────────────────────────────────────────────
+# t3.small tiene solo 2GB de RAM y `npm run build` puede acercarse a ese límite
+# (más aún con webpack plugins adicionales, ej. @sentry/nextjs) — sin swap, un
+# pico de memoria mata el proceso de build con OOM killer en vez de solo ir más
+# lento, y el build nunca llega a `pm2 start`.
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 # ── Código de la app (primero, en directorio vacío) ──────────────────────────
 APP_DIR=/opt/alertacomunal
 mkdir -p "$APP_DIR"
