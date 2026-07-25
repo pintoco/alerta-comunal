@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import MunicipalityToggle from '@/components/admin/MunicipalityToggle'
+import MunicipalityDeleteButton from '@/components/admin/MunicipalityDeleteButton'
 import { formatDate } from '@/lib/utils'
 import { EMERGENCY_TYPE_LABELS } from '@/lib/utils'
 
@@ -131,6 +132,11 @@ export default async function MunicipalidadDetailPage({
             <Link href={`/admin/municipalidades/${id}/templates`} className="btn-secondary text-sm">Templates correo</Link>
             <Link href={`/admin/municipalidades/${id}/webhook`} className="btn-secondary text-sm">Webhook</Link>
             <Link href={`/admin/municipalidades/${id}/editar`} className="btn-secondary text-sm">Editar</Link>
+            <MunicipalityDeleteButton
+              id={municipality.id}
+              disabled={municipality.users.length > 0 || totalEmergencies > 0}
+              disabledReason={`No se puede eliminar: tiene ${municipality.users.length} usuario(s) y ${totalEmergencies} emergencia(s) asociadas.`}
+            />
           </div>
         </div>
 

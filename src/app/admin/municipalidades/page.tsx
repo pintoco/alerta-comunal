@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import MainLayout from '@/components/layout/MainLayout'
 import MunicipalityToggle from '@/components/admin/MunicipalityToggle'
+import MunicipalityDeleteButton from '@/components/admin/MunicipalityDeleteButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,6 +90,11 @@ export default async function MunicipalidadesPage() {
                       <div className="flex items-center justify-end gap-3">
                         <Link href={`/admin/municipalidades/${m.id}`} className="text-blue-600 hover:underline text-xs">Ver</Link>
                         <Link href={`/admin/municipalidades/${m.id}/editar`} className="text-blue-600 hover:underline text-xs">Editar</Link>
+                        <MunicipalityDeleteButton
+                          id={m.id}
+                          disabled={m._count.users > 0 || m._count.emergencies > 0}
+                          disabledReason={`No se puede eliminar: tiene ${m._count.users} usuario(s) y ${m._count.emergencies} emergencia(s) asociadas.`}
+                        />
                       </div>
                     </td>
                   </tr>
