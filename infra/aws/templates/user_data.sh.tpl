@@ -84,6 +84,11 @@ set -euxo pipefail
 cd /opt/alertacomunal
 npm ci
 npx prisma generate
+# BUILD_ID estable por commit — ver comentario en next.config.ts. Todas las
+# instancias del ASG que arranquen sobre el mismo commit terminan con
+# nombres de chunk idénticos, así que cualquiera puede servir los assets de
+# cualquier otra sin 404 cruzados.
+export NEXT_BUILD_ID="$(git rev-parse HEAD)"
 npm run build
 pm2 delete alertacomunal || true
 pm2 start ecosystem.config.js --env production
