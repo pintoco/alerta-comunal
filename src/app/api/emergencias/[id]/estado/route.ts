@@ -30,11 +30,18 @@ export async function PATCH(
       return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
     }
 
-    const { status, closingNotes } = result.data
+    const { status, closingNotes, closingReasonId } = result.data
 
     if (status === 'CERRADA' && (!closingNotes || closingNotes.trim().length < 10)) {
       return NextResponse.json(
         { error: 'Las notas de cierre son obligatorias al cerrar una emergencia (mínimo 10 caracteres).' },
+        { status: 400 }
+      )
+    }
+
+    if (status === 'CERRADA' && !closingReasonId) {
+      return NextResponse.json(
+        { error: 'Debes seleccionar un motivo de cierre.' },
         { status: 400 }
       )
     }
@@ -44,6 +51,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Emergencia no encontrada' }, { status: 404 })
     }
 
+    if (closingReasonId) {
+      const reason = await prisma.closingReason.findUnique({ where: { id: closingReasonId } })
+      if (!reason || reason.municipalityId !== previous.municipalityId) {
+        return NextResponse.json(
+          { error: 'El motivo de cierre no pertenece a la municipalidad de esta emergencia' },
+          { status: 400 }
+        )
+      }
+    }
+
     const isClosed = status === 'CERRADA' || status === 'RESUELTA'
 
     const emergency = await prisma.emergency.update({
@@ -51,8 +68,10 @@ export async function PATCH(
       data: {
         status,
         closingNotes: closingNotes || null,
+        closingReasonId: isClosed ? closingReasonId || null : null,
         closedAt: isClosed ? new Date() : null,
       },
+      include: { closingReason: { select: { id: true, label: true } } },
     })
 
     await prisma.activityLog.create({

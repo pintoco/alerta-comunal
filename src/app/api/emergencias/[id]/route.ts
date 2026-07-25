@@ -29,6 +29,7 @@ export async function GET(
     include: {
       assignedTo: { select: { id: true, name: true, email: true, role: true } },
       coAssignees: { include: { user: { select: { id: true, name: true, email: true } } } },
+      closingReason: { select: { id: true, label: true } },
       evidences: { orderBy: { createdAt: 'desc' } },
       tasks: {
         include: { assignedTo: { select: { id: true, name: true } } },

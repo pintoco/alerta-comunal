@@ -46,7 +46,10 @@ export async function GET(request: Request) {
 
   const emergencies = await prisma.emergency.findMany({
     where,
-    include: { assignedTo: { select: { name: true } } },
+    include: {
+      assignedTo: { select: { name: true } },
+      closingReason: { select: { label: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })
 
@@ -55,7 +58,7 @@ export async function GET(request: Request) {
     'Origen',
     ...(includePII ? ['Reportante', 'Teléfono reportante'] : []),
     'Responsable',
-    'Fecha creación', 'Fecha ocurrencia', 'Fecha cierre',
+    'Fecha creación', 'Fecha ocurrencia', 'Fecha cierre', 'Motivo de cierre',
   ]
 
   const rows = emergencies.map((e) => [
@@ -72,6 +75,7 @@ export async function GET(request: Request) {
     e.createdAt.toISOString(),
     e.occurredAt?.toISOString() ?? '',
     e.closedAt?.toISOString() ?? '',
+    e.closingReason?.label ?? '',
   ])
 
   const csvContent = [header, ...rows]

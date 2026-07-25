@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   const municipalities = await prisma.municipality.findMany({
     where: { active: true },
-    select: { slug: true, name: true },
+    select: { slug: true, name: true, logoUrl: true, primaryColor: true },
     orderBy: { name: 'asc' },
   })
 

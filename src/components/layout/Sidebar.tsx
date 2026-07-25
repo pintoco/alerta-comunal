@@ -92,11 +92,12 @@ const roleLabel: Record<UserRole, string> = {
 interface SidebarProps {
   userRole: UserRole
   userName: string
+  municipalityId?: string | null
   municipalityName?: string | null
   municipalityCommune?: string | null
 }
 
-export default function Sidebar({ userRole, userName, municipalityName, municipalityCommune }: SidebarProps) {
+export default function Sidebar({ userRole, userName, municipalityId, municipalityName, municipalityCommune }: SidebarProps) {
   const pathname = usePathname()
 
   const contextLabel =
@@ -159,6 +160,31 @@ export default function Sidebar({ userRole, userName, municipalityName, municipa
                   {item.label}
                 </Link>
               ))}
+            {/* ADMIN gestiona la marca y los motivos de cierre de su propia
+                municipalidad — SUPER_ADMIN ya llega ahí desde el detalle de
+                cada municipalidad en /admin/municipalidades. */}
+            {userRole === 'ADMIN' && municipalityId && (
+              <>
+                <Link
+                  href={`/admin/municipalidades/${municipalityId}/branding`}
+                  className={navLinkClass(`/admin/municipalidades/${municipalityId}/branding`)}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                  </svg>
+                  Marca
+                </Link>
+                <Link
+                  href={`/admin/municipalidades/${municipalityId}/motivos-cierre`}
+                  className={navLinkClass(`/admin/municipalidades/${municipalityId}/motivos-cierre`)}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Motivos de cierre
+                </Link>
+              </>
+            )}
           </div>
         )}
 

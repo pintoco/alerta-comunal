@@ -683,14 +683,18 @@ Pasos: desplegar este servidor en cualquier lado accesible por `https://` → cr
 - [x] **Smoke tests E2E** (Playwright) sobre `/login` y `/reportar`
 - [x] **CI en GitHub Actions**: lint + build + tests unitarios, y un job separado que valida las migraciones de Prisma contra un Postgres efímero antes de correr los smoke tests — ambos como checks requeridos en `main`
 - [x] **Verificación real de backups**: RDS con retención de 7 días + point-in-time recovery, S3 con versionado habilitado; restauración de prueba (point-in-time) confirmada íntegra
-- [x] **Monitoreo de errores en producción** (Sentry): captura excepciones de servidor, edge y cliente vía `instrumentation.ts`/`instrumentation-client.ts`, Session Replay solo en errores, y `error.tsx`/`global-error.tsx` conectados — opcional, se activa solo con `NEXT_PUBLIC_SENTRY_DSN`
+- [x] **Monitoreo de errores en producción** (Sentry): captura excepciones de servidor, edge y cliente vía `instrumentation.ts`/`instrumentation-client.ts`, Session Replay solo en errores, y `error.tsx`/`global-error.tsx` conectados — activo en producción con `NEXT_PUBLIC_SENTRY_DSN`
+- [x] **Branding por municipalidad**: logo + color de acento, visibles en `/reportar/[slug]` y `/mapa-publico/[slug]`; autogestionable por ADMIN de su propia municipalidad o por SUPER_ADMIN
+- [x] **Motivos de cierre configurables por municipalidad**: lista propia por municipio, obligatoria (junto a las observaciones de texto libre) al cerrar una emergencia — aparece en el detalle, el reporte imprimible y el CSV exportado
 
 ### Corto plazo (próximos sprints)
 
 - [ ] Rotar la access key AWS usada durante el setup inicial de Terraform
 - [ ] Retirar el acceso SSH/EC2 Instance Connect de depuración una vez terminadas las pruebas en producción
 - [ ] Automatizar la política de retención de datos del reportante (job de anonimización + cron en EC2/Terraform — ver sección "Retención de datos")
-- [ ] Crear el proyecto en sentry.io, cargar el DSN en `terraform.tfvars` y aplicar el instance refresh para activar el monitoreo en producción
+- [ ] Categorías de emergencia configurables por municipalidad (además del listado fijo actual) — fase 2 de "Flexibilidad comercial", pendiente por tocar un enum usado en ~15 archivos
+- [ ] Unidades operacionales como etiqueta organizativa de usuarios — fase 2 de "Flexibilidad comercial"
+- [ ] Planes/límites SaaS informativos (uso vs. límite por municipalidad) — quedó fuera de esta ronda de "Flexibilidad comercial" a pedido explícito
 
 ### Largo plazo
 

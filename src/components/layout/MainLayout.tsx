@@ -28,6 +28,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <Sidebar
         userRole={session.role}
         userName={session.name}
+        municipalityId={session.municipalityId}
         municipalityName={municipalityName}
         municipalityCommune={municipalityCommune}
       />

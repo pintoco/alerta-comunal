@@ -90,4 +90,5 @@ export type PublicReportFormData = z.infer<typeof publicReportSchema>
 export const statusUpdateSchema = z.object({
   status: z.enum(['NUEVA', 'EN_ATENCION', 'RESUELTA', 'CERRADA', 'DESCARTADA']),
   closingNotes: z.string().max(1000).optional().nullable(),
+  closingReasonId: z.string().optional().nullable(),
 })

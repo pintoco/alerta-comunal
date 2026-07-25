@@ -29,6 +29,7 @@ export default async function ReportePage({
     include: {
       assignedTo: { select: { name: true, email: true } },
       municipality: { select: { name: true, commune: true, region: true } },
+      closingReason: { select: { label: true } },
       evidences: { orderBy: { createdAt: 'asc' } },
       tasks: {
         include: { assignedTo: { select: { name: true } } },
@@ -263,12 +264,15 @@ export default async function ReportePage({
         )}
 
         {/* Notas de cierre */}
-        {emergency.closingNotes && (
+        {(emergency.closingNotes || emergency.closingReason) && (
           <div className="mb-8 p-4 bg-green-50 border border-green-200 rounded">
             <h3 className="text-xs font-bold uppercase tracking-wide text-green-700 mb-2">
               Observaciones de cierre
             </h3>
-            <p className="text-green-900 text-sm">{emergency.closingNotes}</p>
+            {emergency.closingReason && (
+              <p className="text-green-900 text-sm font-semibold mb-1">{emergency.closingReason.label}</p>
+            )}
+            {emergency.closingNotes && <p className="text-green-900 text-sm">{emergency.closingNotes}</p>}
           </div>
         )}
 

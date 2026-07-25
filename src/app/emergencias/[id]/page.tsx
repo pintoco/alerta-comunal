@@ -40,6 +40,8 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [newStatus, setNewStatus] = useState('')
   const [closingNotes, setClosingNotes] = useState('')
+  const [closingReasonId, setClosingReasonId] = useState('')
+  const [closingReasons, setClosingReasons] = useState<{ id: string; label: string; active: boolean }[]>([])
   const [statusLoading, setStatusLoading] = useState(false)
 
   useEffect(() => {
@@ -52,6 +54,12 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
       setUsers(us)
       setSession(sess)
       setNewStatus(em.status)
+      if (em.municipalityId) {
+        fetch(`/api/admin/municipalidades/${em.municipalityId}/motivos-cierre`)
+          .then((r) => (r.ok ? r.json() : []))
+          .then(setClosingReasons)
+          .catch(() => setClosingReasons([]))
+      }
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [id])
@@ -62,11 +70,11 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
       const res = await fetch(`/api/emergencias/${id}/estado`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, closingNotes }),
+        body: JSON.stringify({ status: newStatus, closingNotes, closingReasonId: closingReasonId || null }),
       })
       if (res.ok) {
         const updated = await res.json()
-        setEmergency((prev) => prev ? { ...prev, status: updated.status, closedAt: updated.closedAt, closingNotes: updated.closingNotes } : prev)
+        setEmergency((prev) => prev ? { ...prev, status: updated.status, closedAt: updated.closedAt, closingNotes: updated.closingNotes, closingReasonId: updated.closingReasonId, closingReason: updated.closingReason } : prev)
         setShowStatusModal(false)
       }
     } finally {
@@ -309,10 +317,13 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
                 </dl>
               </div>
 
-              {emergency.closingNotes && (
+              {(emergency.closingNotes || emergency.closingReason) && (
                 <div className="card p-5 border-green-200 bg-green-50">
                   <h2 className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Observaciones de cierre</h2>
-                  <p className="text-green-800 text-sm">{emergency.closingNotes}</p>
+                  {emergency.closingReason && (
+                    <p className="text-green-900 text-sm font-medium mb-1">{emergency.closingReason.label}</p>
+                  )}
+                  {emergency.closingNotes && <p className="text-green-800 text-sm">{emergency.closingNotes}</p>}
                 </div>
               )}
             </div>
@@ -335,16 +346,31 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
             </select>
           </div>
           {(newStatus === 'CERRADA' || newStatus === 'RESUELTA') && (
-            <div>
-              <label className="form-label">Observaciones de cierre</label>
-              <textarea
-                className="form-input"
-                rows={3}
-                value={closingNotes}
-                onChange={(e) => setClosingNotes(e.target.value)}
-                placeholder="Descripción de cómo se resolvió la emergencia..."
-              />
-            </div>
+            <>
+              <div>
+                <label className="form-label">Motivo de cierre{newStatus === 'CERRADA' ? ' *' : ''}</label>
+                <select
+                  className="form-input"
+                  value={closingReasonId}
+                  onChange={(e) => setClosingReasonId(e.target.value)}
+                >
+                  <option value="">— Selecciona un motivo —</option>
+                  {closingReasons.filter((r) => r.active).map((r) => (
+                    <option key={r.id} value={r.id}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Observaciones de cierre</label>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  value={closingNotes}
+                  onChange={(e) => setClosingNotes(e.target.value)}
+                  placeholder="Descripción de cómo se resolvió la emergencia..."
+                />
+              </div>
+            </>
           )}
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setShowStatusModal(false)}>Cancelar</Button>

@@ -9,6 +9,8 @@ import type { Emergency } from '@/types'
 interface MunicipalityOption {
   slug: string
   name: string
+  logoUrl: string | null
+  primaryColor: string | null
 }
 
 const MapWrapper = dynamic(() => import('@/components/map/MapWrapper'), {
@@ -84,6 +86,9 @@ export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaP
       : undefined
 
   const reportarHref = municipalitySlug ? `/reportar/${municipalitySlug}` : '/reportar'
+  const branding = municipalitySlug
+    ? municipalities.find((m) => m.slug === municipalitySlug)
+    : undefined
 
   const activas = emergencies.filter((e) => e.status === 'NUEVA' || e.status === 'EN_ATENCION')
   const enAtencion = emergencies.filter((e) => e.status === 'EN_ATENCION').length
@@ -105,14 +110,22 @@ export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaP
       <header className="bg-slate-900 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
+            <div
+              className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
+              style={branding?.primaryColor ? { backgroundColor: branding.primaryColor } : undefined}
+            >
+              {branding?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={branding.logoUrl} alt={branding.name} className="w-full h-full object-contain" />
+              ) : (
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              )}
             </div>
             <div>
               <p className="text-white font-bold text-sm">AlertaComunal</p>
-              <p className="text-slate-400 text-xs">Mapa de emergencias activas</p>
+              <p className="text-slate-400 text-xs">{branding?.name ?? 'Mapa de emergencias activas'}</p>
             </div>
           </div>
           <div className="flex items-center gap-4 text-xs">

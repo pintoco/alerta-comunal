@@ -35,6 +35,8 @@ export interface Municipality {
   region?: string | null
   commune?: string | null
   active: boolean
+  logoUrl?: string | null
+  primaryColor?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -74,6 +76,8 @@ export interface Emergency {
   occurredAt?: string | null
   closedAt?: string | null
   closingNotes?: string | null
+  closingReasonId?: string | null
+  closingReason?: { id: string; label: string } | null
   observations?: string | null
   createdAt: string
   updatedAt: string

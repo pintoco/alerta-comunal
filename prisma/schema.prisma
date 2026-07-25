@@ -61,19 +61,22 @@ enum TaskStatus {
 }
 
 model Municipality {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  region    String?
-  commune   String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  region       String?
+  commune      String?
+  active       Boolean  @default(true)
+  logoUrl      String?
+  primaryColor String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   users          User[]
   emergencies    Emergency[]
   emailTemplates MunicipalityEmailTemplate[]
   webhook        MunicipalityWebhook?
+  closingReasons ClosingReason[]
 }
 
 model User {
@@ -128,6 +131,8 @@ model Emergency {
   occurredAt     DateTime?
   closedAt       DateTime?
   closingNotes   String?
+  closingReasonId String?
+  closingReason   ClosingReason? @relation(fields: [closingReasonId], references: [id], onDelete: SetNull)
   observations   String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -226,6 +231,23 @@ model MunicipalityWebhook {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   municipality        Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
+}
+
+// Motivos de cierre configurables por municipalidad — seleccionados al cerrar
+// una emergencia (ver Emergency.closingReasonId), además del texto libre de
+// closingNotes, no en reemplazo. `active: false` en vez de borrar para no
+// invalidar el closingReasonId de emergencias históricas.
+model ClosingReason {
+  id             String       @id @default(cuid())
+  municipalityId String
+  label          String
+  active         Boolean      @default(true)
+  order          Int          @default(0)
+  createdAt      DateTime     @default(now())
+  municipality   Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
+  emergencies    Emergency[]
+
+  @@index([municipalityId])
 }
 
 // Audit log global — sin FK para que no se elimine en cascada.
