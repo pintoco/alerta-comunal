@@ -8,6 +8,9 @@ systemctl enable --now amazon-ssm-agent
 npm install -g pm2
 
 # ── Agente de CloudWatch para logs ────────────────────────────────────────────
+# ecosystem.config.js corre 2 procesos en pm2 cluster mode, que escribe un log
+# por worker con sufijo -0/-1 (nunca el nombre sin sufijo) — el file_path debe
+# ser un wildcard o el agente termina tailando un archivo que no existe.
 dnf install -y amazon-cloudwatch-agent
 cat <<'CWCONFIG' > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 {
@@ -16,12 +19,12 @@ cat <<'CWCONFIG' > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.
       "files": {
         "collect_list": [
           {
-            "file_path": "/home/ec2-user/.pm2/logs/alertacomunal-out.log",
+            "file_path": "/home/ec2-user/.pm2/logs/alertacomunal-out-*.log",
             "log_group_name": "${log_group_name}",
             "log_stream_name": "{instance_id}/out"
           },
           {
-            "file_path": "/home/ec2-user/.pm2/logs/alertacomunal-error.log",
+            "file_path": "/home/ec2-user/.pm2/logs/alertacomunal-error-*.log",
             "log_group_name": "${log_group_name}",
             "log_stream_name": "{instance_id}/error"
           }
