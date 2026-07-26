@@ -23,7 +23,6 @@ Plataforma SaaS multi-tenant para registrar, georreferenciar, gestionar y hacer 
 | Correo | Resend |
 | Infraestructura | Terraform (AWS) — ver sección dedicada |
 | Proceso en servidor | PM2 (cluster mode) sobre EC2 |
-| Deploy alternativo | Railway (Nixpacks, sin Terraform) |
 
 ## Arquitectura en AWS (producción)
 
@@ -82,7 +81,7 @@ Auto Scaling Group (subredes privadas "app", 2 AZ)
 | `redis_node_type` | No | `cache.t3.micro` | Clase de nodo ElastiCache |
 | `domain_name` / `hosted_zone_id` | No | — | Si se completan, Terraform crea el registro Route53 |
 | `admin_cidr` / `ssh_key_name` | No | — | Habilitan SSH directo además de SSM (solo para depuración temporal) |
-| `resend_api_key` / `email_enabled` / `google_maps_api_key` | No | `""` / `false` / `""` | Se guardan en SSM, igual que en Railway |
+| `resend_api_key` / `email_enabled` / `google_maps_api_key` | No | `""` / `false` / `""` | Se guardan en SSM Parameter Store |
 | `public_default_municipality_slug` | No | `demo` | Municipalidad usada como fallback en reportes públicos |
 
 Copia `infra/aws/terraform.tfvars.example` a `terraform.tfvars` (gitignored) y completa los valores antes de aplicar.
@@ -173,8 +172,11 @@ Ambos enlazados desde el footer de la página de inicio (`src/app/page.tsx`).
 Disponible solo para `SUPER_ADMIN`. Incluye:
 
 - **Dashboard global**: total de municipalidades, usuarios y emergencias en toda la plataforma
-- **Municipalidades** (`/admin/municipalidades`): listado con emergencias activas por municipio, crear, editar, activar/desactivar
+- **Municipalidades** (`/admin/municipalidades`): listado con emergencias activas por municipio, crear, editar, activar/desactivar, **eliminar** (solo si no tiene usuarios ni emergencias asociadas)
 - **Detalle de municipalidad** (`/admin/municipalidades/[id]`): 6 KPIs operacionales, distribución por tipo de emergencia, emergencias recientes, gestión de usuarios
+- **Marca** (`/admin/municipalidades/[id]/branding`): logo y color de acento, visibles en las páginas públicas ciudadanas — autogestionable también por el ADMIN de esa municipalidad
+- **Motivos de cierre** (`/admin/municipalidades/[id]/motivos-cierre`): lista configurable por municipio, obligatoria al cerrar una emergencia — autogestionable también por el ADMIN de esa municipalidad
+- **Plan y uso** (`/admin/municipalidades/[id]/plan`): plan (Gratuito/Básico/Pro) asignado por SUPER_ADMIN, con barras de uso informativas (emergencias del mes, usuarios activos, almacenamiento) — el ADMIN de esa municipalidad puede verlo, no cambiarlo
 - **Plantillas de correo** (`/admin/municipalidades/[id]/templates`): asunto y cuerpo HTML personalizables por municipalidad para los correos de asignación y de nuevo reporte ciudadano, con variables `{{code}}`, `{{type}}`, `{{link}}`, etc.
 - **Webhook** (`/admin/municipalidades/[id]/webhook`): URL propia por municipalidad, firmada con HMAC-SHA256, con toggle por evento (creación, asignación, nuevo reporte) y botón de prueba
 - **Usuarios** (`/admin/usuarios`): listado global, crear, editar rol/municipalidad, activar/desactivar, cambiar contraseña, **eliminar** (solo SUPER_ADMIN)
@@ -188,7 +190,7 @@ Campos: nombre, slug (único), región, comuna, activo.
 
 Reglas:
 - El slug solo puede contener letras minúsculas, números y guiones (ej: `tierra-amarilla`) y es el que se usa en `/reportar/[slug]` y `/mapa-publico/[slug]`
-- No se permite borrado físico — solo activar/desactivar
+- Eliminación física solo si la municipalidad no tiene usuarios ni emergencias asociadas (evita dejar registros huérfanos); en cualquier otro caso, la vía es desactivarla
 - Una municipalidad inactiva desaparece del desplegable público y deja de aceptar reportes por su slug
 - El slug no debe cambiarse si está en uso como `PUBLIC_DEFAULT_MUNICIPALITY_SLUG`
 
@@ -209,7 +211,7 @@ Reglas:
 - `ADMIN`, `OPERADOR` y `VISUALIZADOR` ven solo los datos de **su municipalidad**
 - Un usuario sin municipalidad asignada (no `SUPER_ADMIN`) recibe 403 en todas las operaciones
 
-## Demo municipal
+## Funcionalidades en detalle
 
 ### Dashboard ejecutivo
 
@@ -240,8 +242,8 @@ El reporte de cada emergencia (`/emergencias/[id]/reporte`) incluye encabezado i
 - Botón GPS + geocodificación reversa con **Google Geocoding API** (Nominatim como respaldo si Google falla o no hay API key)
 - Mini-mapa Leaflet con pin arrastrable para ajuste fino de ubicación
 - Foto opcional (jpg/png/webp, máx. 5 MB)
-- Genera código único de seguimiento (EMG-YYYY-XXXX)
-- Con `[slug]`: asigna directamente esa municipalidad. Sin `[slug]`: asigna por coincidencia región/comuna o usa la municipalidad demo como fallback
+- Genera un token aleatorio de seguimiento (no el código interno `EMG-YYYY-XXXX`, que nunca se muestra al ciudadano)
+- Con `[slug]`: asigna directamente esa municipalidad. Sin `[slug]`: asigna por coincidencia región/comuna; en producción, sin coincidencia responde 400 (no hay fallback automático a una municipalidad demo)
 
 ### Mapa público ciudadano (`/mapa-publico` y `/mapa-publico/[slug]`)
 
@@ -374,57 +376,6 @@ En GitHub Actions hay dos jobs:
 
 Ambos jobs son checks requeridos en `main` — un PR no se puede mergear si alguno falla.
 
-## Deploy en Railway (alternativa sin Terraform)
-
-Railway sigue siendo una opción válida para un despliegue simple de instancia única (sin Auto Scaling ni WAF).
-
-### Paso 1: Repositorio GitHub
-
-```bash
-git clone https://github.com/pintoco/alerta-comunal.git
-```
-
-### Paso 2: Crear proyecto en Railway
-
-1. Ve a [railway.app](https://railway.app)
-2. **New Project** → **Deploy from GitHub repo** → selecciona `alerta-comunal`
-
-### Paso 3: Agregar PostgreSQL
-
-En el proyecto Railway: **New** → **Database** → **PostgreSQL**. Railway vincula automáticamente `DATABASE_URL`.
-
-### Paso 4: Variables de entorno
-
-```
-JWT_SECRET=<genera con: openssl rand -base64 32>
-APP_URL=https://tu-app.up.railway.app
-PUBLIC_DEFAULT_MUNICIPALITY_SLUG=demo
-STORAGE_PROVIDER=local
-MAX_UPLOAD_SIZE_MB=5
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<tu key de Google Cloud Console>
-RESEND_API_KEY=<tu API key de Resend>
-EMAIL_FROM=tecnico@elementalpro.cl
-EMAIL_ENABLED=true
-```
-
-> **No agregar `NODE_ENV`** como variable de servicio. Railway inyecta un valor no estándar que confunde a Next.js; el build ya usa `cross-env NODE_ENV=production` para forzar el modo correcto.
-
-### Paso 4b (opcional): Volumen para imágenes persistentes
-
-Railway elimina archivos al redesplegar. Con `STORAGE_PROVIDER=local`, monta un Volume en `/app/public/uploads` para conservarlas, o usa `STORAGE_PROVIDER=s3` directamente.
-
-### Paso 5: Comandos en Railway Settings
-
-| Campo | Valor |
-|-------|-------|
-| Build Command | `npm run build` |
-| Start Command | `npm run start` |
-| Release Command | `npx prisma migrate deploy && npx prisma db seed` |
-
-### Paso 6: Deploy
-
-Railway detecta el push a `main` y despliega automáticamente.
-
 ## Usuarios demo (solo desarrollo local)
 
 Las credenciales de datos de prueba **no se documentan aquí** (nunca en texto plano en un archivo versionado). Para generarlas localmente:
@@ -449,9 +400,11 @@ alerta-comunal/
 ├── prisma/
 │   ├── schema.prisma          # Modelos: Municipality, User, Emergency, Task, Evidence,
 │   │                          # EmergencyCoAssignee, MunicipalityEmailTemplate, MunicipalityWebhook,
-│   │                          # ActivityLog, AuditLog
+│   │                          # ClosingReason, ActivityLog, AuditLog
 │   ├── migrations/
-│   └── seed.ts                # Admin + operadores + municipalidad demo + emergencias de ejemplo
+│   ├── seed.ts                 # Dispatcher: SEED_DEMO=true → seed-demo.ts, si no → seed-production.ts
+│   ├── seed-production.ts      # Modo por defecto: solo crea un SUPER_ADMIN de arranque si no existe ninguno
+│   └── seed-demo.ts            # Municipalidad demo + 5 usuarios + emergencias de ejemplo (solo local)
 ├── public/
 │   ├── uploads/                       # Imágenes subidas localmente (gitignored)
 │   ├── manual-administrador.html      # Manual de uso — personal municipal
@@ -466,7 +419,7 @@ alerta-comunal/
 │   │   │   ├── municipios-publicos/ # GET municipalidades activas (público)
 │   │   │   ├── dashboard/           # stats/ (KPIs snapshot) + stream/ (SSE tiempo real)
 │   │   │   ├── health/              # Healthcheck para el target group del ALB
-│   │   │   └── admin/               # CRUD municipalidades, usuarios, plantillas, webhook y audit-log
+│   │   │   └── admin/               # CRUD municipalidades, usuarios, branding, motivos de cierre, plan, plantillas, webhook y audit-log
 │   │   ├── dashboard/          # Dashboard con estadísticas en tiempo real
 │   │   ├── emergencias/         # Listado, nueva, detalle, editar, reporte PDF
 │   │   ├── mapa/                # Mapa interactivo interno (requiere login)
@@ -528,7 +481,7 @@ STORAGE_PROVIDER=local
 MAX_UPLOAD_SIZE_MB=5
 ```
 
-Adecuado para desarrollo. En Railway, `public/uploads` no es persistente sin un Volume. En AWS, cada instancia del ASG tiene su propio disco — **no usar `local` en AWS**, ya que las imágenes no se compartirían entre instancias ni sobrevivirían a un instance refresh.
+Adecuado solo para desarrollo local. En AWS, cada instancia del ASG tiene su propio disco — **no usar `local` en producción**, ya que las imágenes no se compartirían entre instancias ni sobrevivirían a un instance refresh.
 
 ### Modo S3 (recomendado en producción)
 
