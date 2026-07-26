@@ -26,6 +26,11 @@ export async function GET(request: Request) {
   const sector = searchParams.get('sector') || ''
   const desde = searchParams.get('desde') || ''
   const hasta = searchParams.get('hasta') || ''
+  // Usado por la app móvil ("Mis emergencias"): sin esto, el filtro por
+  // responsable asignado tendría que hacerse client-side sobre el listado
+  // completo de la municipalidad, ineficiente e inconsistente con el resto
+  // de filtros de este endpoint, que siempre se aplican a nivel de query.
+  const assignedToId = searchParams.get('assignedToId') || ''
 
   const where: Record<string, unknown> = { ...getMunicipalityFilter(session) }
 
@@ -42,6 +47,7 @@ export async function GET(request: Request) {
   if (priority) where.priority = priority
   if (category) where.category = { label: { equals: category, mode: 'insensitive' } }
   if (sector) where.sector = { contains: sector, mode: 'insensitive' }
+  if (assignedToId) where.assignedToId = assignedToId
 
   if (desde || hasta) {
     const createdAt: Record<string, Date> = {}
