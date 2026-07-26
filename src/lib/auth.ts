@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import type { Session } from '@/types'
 import { getJwtSecret } from './config'
 
@@ -25,7 +25,19 @@ export async function verifyToken(token: string): Promise<Session | null> {
 export async function getSession(): Promise<Session | null> {
   try {
     const cookieStore = await cookies()
-    const token = cookieStore.get('auth-token')?.value
+    let token = cookieStore.get('auth-token')?.value
+
+    // Fallback para la app móvil: no tiene cookie jar httpOnly, envía el JWT
+    // guardado en SecureStore como Authorization: Bearer. Sin efecto para
+    // clientes web (siempre traen la cookie primero).
+    if (!token) {
+      const headersList = await headers()
+      const authHeader = headersList.get('authorization')
+      if (authHeader?.startsWith('Bearer ')) {
+        token = authHeader.slice('Bearer '.length)
+      }
+    }
+
     if (!token) return null
     return await verifyToken(token)
   } catch {

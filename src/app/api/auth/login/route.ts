@@ -95,9 +95,15 @@ export async function POST(request: Request) {
 
     const token = await createToken(session)
 
+    // La app móvil no tiene cookie jar httpOnly: se identifica con este header
+    // y recibe el JWT en el body para guardarlo ella misma (SecureStore). Un
+    // cliente web nunca manda este header, así que su respuesta no cambia.
+    const isMobileClient = headersList.get('x-client-type') === 'mobile'
+
     const response = NextResponse.json({
       success: true,
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      ...(isMobileClient ? { token } : {}),
     })
 
     response.cookies.set('auth-token', token, {

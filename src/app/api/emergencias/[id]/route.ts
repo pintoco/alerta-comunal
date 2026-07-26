@@ -5,6 +5,7 @@ import { requireAuth, requireRole, MANAGE_ROLES } from '@/lib/permissions'
 import { requireEmergencyAccess, requireMunicipalityAssigned } from '@/lib/tenant'
 import { sendEmergencyAssignmentEmail, isEmailEnabled } from '@/lib/email'
 import { sendWebhook } from '@/lib/webhooks'
+import { sendPushNotification } from '@/lib/push'
 import { deleteUpload } from '@/lib/storage'
 import { writeAuditLog } from '@/lib/audit'
 import { redactPII } from '@/lib/pii'
@@ -254,6 +255,25 @@ export async function PUT(
       }
     }
 
+    // Notificación push a co-asignados nuevos
+    if (toAdd.length > 0) {
+      try {
+        const coUsers = await prisma.user.findMany({
+          where: { id: { in: toAdd }, active: true },
+          select: { id: true },
+        })
+        for (const coUser of coUsers) {
+          await sendPushNotification(coUser.id, {
+            title: `Te agregaron como co-responsable — ${emergency.code}`,
+            body: `${emergency.category?.label ?? 'Sin categoría'} en ${emergency.address}`,
+            data: { emergencyId: emergency.id },
+          })
+        }
+      } catch (pushErr) {
+        console.error('[emergencias] Error al enviar push a co-asignados:', pushErr)
+      }
+    }
+
     // Send assignment email if assignee changed to a new (non-null) user
     if (isEmailEnabled() && data.assignedToId && data.assignedToId !== previous.assignedToId) {
       try {
@@ -301,6 +321,46 @@ export async function PUT(
         }
       } catch (emailErr) {
         console.error('[emergencias] Error al enviar correo de reasignación:', emailErr)
+      }
+    }
+
+    // Notificación push si el responsable cambió a alguien nuevo
+    if (data.assignedToId && data.assignedToId !== previous.assignedToId) {
+      try {
+        const pushTargetUser = await prisma.user.findUnique({
+          where: { id: data.assignedToId },
+          select: { name: true, active: true },
+        })
+        if (pushTargetUser?.active) {
+          const pushResult = await sendPushNotification(data.assignedToId, {
+            title: `Emergencia reasignada a ti — ${emergency.code}`,
+            body: `${emergency.category?.label ?? 'Sin categoría'} en ${emergency.address}`,
+            data: { emergencyId: emergency.id },
+          })
+          if (!pushResult.skipped) {
+            await prisma.activityLog.create({
+              data: {
+                emergencyId: id,
+                userId: session.id,
+                action: pushResult.success ? 'PUSH_SENT' : 'PUSH_FAILED',
+                description: pushResult.success
+                  ? `Notificación push enviada a ${pushTargetUser.name}.`
+                  : `No se pudo enviar la notificación push a ${pushTargetUser.name}.`,
+              },
+            })
+            await writeAuditLog({
+              action: pushResult.success ? 'PUSH_SENT' : 'PUSH_FAILED',
+              entityType: 'EMERGENCY',
+              entityId: emergency.id,
+              entityLabel: emergency.code,
+              userId: session.id,
+              userName: session.name,
+              metadata: { recipientName: pushTargetUser.name, error: pushResult.error },
+            })
+          }
+        }
+      } catch (pushErr) {
+        console.error('[emergencias] Error al enviar push de reasignación:', pushErr)
       }
     }
 
