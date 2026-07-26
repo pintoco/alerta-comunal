@@ -31,6 +31,13 @@
           "photosPermission": "AlertaComunal necesita acceder a tus fotos para adjuntar evidencia a una emergencia.",
           "cameraPermission": "AlertaComunal necesita acceder a la cámara para tomar fotos de evidencia."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#3b82f6"
+        }
       ]
     ]
   }

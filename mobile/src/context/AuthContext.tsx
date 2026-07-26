@@ -1,7 +1,22 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { login as apiLogin, fetchMe } from '../api/auth'
 import { getToken, clearToken, setUnauthorizedHandler } from '../api/client'
+import { registerDeviceToken, unregisterDeviceToken } from '../api/push'
+import { registerForPushNotificationsAsync } from '../notifications'
 import type { Session } from '../types'
+
+// Fire-and-forget: nunca debe bloquear ni romper login/logout si push falla
+// (proyecto sin vincular a EAS, permiso denegado, sin red, etc.)
+async function syncPushRegistration(action: 'register' | 'unregister') {
+  try {
+    const push = await registerForPushNotificationsAsync()
+    if (!push) return
+    if (action === 'register') await registerDeviceToken(push.token, push.platform)
+    else await unregisterDeviceToken(push.token)
+  } catch (err) {
+    console.warn('[push] no se pudo sincronizar el device token:', err)
+  }
+}
 
 interface AuthContextValue {
   session: Session | null
@@ -19,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   const logout = useCallback(async () => {
+    await syncPushRegistration('unregister')
     await clearToken()
     setSession(null)
   }, [])
@@ -34,7 +50,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
       try {
-        setSession(await fetchMe())
+        const me = await fetchMe()
+        setSession(me)
+        syncPushRegistration('register')
       } catch {
         setSession(null)
       } finally {
@@ -46,7 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     setError(null)
     try {
-      setSession(await apiLogin(email, password))
+      const me = await apiLogin(email, password)
+      setSession(me)
+      syncPushRegistration('register')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión')
       throw err

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AlertaComunal Operador — Política de privacidad</title>
+<style>
+  :root {
+    --paper: #f3f5f8; --surface: #ffffff; --ink: #12182b; --ink-soft: #4b5567;
+    --muted: #6b7686; --line: #dde3ec; --brand: #2554e0; --brand-tint: #e9eefd;
+    --sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, ui-sans-serif, sans-serif;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0b1120; --surface: #121a2e; --ink: #e8ecf5; --ink-soft: #b7c0d4;
+      --muted: #8b96ac; --line: #263356; --brand: #6f93ff; --brand-tint: #16244a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #0b1120; --surface: #121a2e; --ink: #e8ecf5; --ink-soft: #b7c0d4;
+    --muted: #8b96ac; --line: #263356; --brand: #6f93ff; --brand-tint: #16244a;
+  }
+  :root[data-theme="light"] {
+    --paper: #f3f5f8; --surface: #ffffff; --ink: #12182b; --ink-soft: #4b5567;
+    --muted: #6b7686; --line: #dde3ec; --brand: #2554e0; --brand-tint: #e9eefd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink); font-family: var(--sans);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; }
+  header { margin-bottom: 32px; }
+  .eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--brand); background: var(--brand-tint);
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;
+  }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin: 0; }
+  section {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px 24px; margin-bottom: 16px;
+  }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  p { margin: 0 0 10px; color: var(--ink-soft); font-size: 14px; }
+  p:last-child { margin-bottom: 0; }
+  ul { margin: 0 0 10px; padding-left: 20px; color: var(--ink-soft); font-size: 14px; }
+  li { margin-bottom: 6px; }
+  strong { color: var(--ink); }
+  footer { margin-top: 32px; color: var(--muted); font-size: 12px; text-align: center; }
+  a { color: var(--brand); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">AlertaComunal Operador</span>
+    <h1>Política de privacidad</h1>
+    <p class="subtitle">Aplicación móvil para operadores municipales en terreno. Última actualización: julio de 2026.</p>
+  </header>
+
+  <section>
+    <h2>Quiénes somos</h2>
+    <p>
+      AlertaComunal Operador es la aplicación móvil complementaria de la plataforma
+      AlertaComunal, provista por Elemental Pro a municipalidades para la gestión de
+      emergencias comunales. Esta app está destinada exclusivamente a personal
+      municipal autorizado (operadores, administradores) — no es de uso ciudadano.
+    </p>
+  </section>
+
+  <section>
+    <h2>Qué datos recolecta la app</h2>
+    <ul>
+      <li><strong>Credenciales de acceso</strong>: tu correo y contraseña se envían al iniciar sesión para autenticarte; no se almacenan en el dispositivo. El token de sesión resultante se guarda cifrado en el almacenamiento seguro del sistema operativo (Keychain en iOS, Keystore en Android).</li>
+      <li><strong>Token de notificaciones push</strong>: si aceptas recibir notificaciones, un identificador de tu dispositivo (provisto por el servicio de notificaciones de Expo) queda asociado a tu cuenta, para poder avisarte cuando se te asigna una emergencia.</li>
+      <li><strong>Fotografías de evidencia</strong>: las fotos que tomas o eliges para adjuntar a una emergencia se suben al mismo sistema de almacenamiento que usa la plataforma web — quedan asociadas a esa emergencia, visibles para el personal autorizado de tu municipalidad.</li>
+      <li><strong>Datos de las emergencias que gestionas</strong>: la app muestra la información de las emergencias que tienes asignadas (dirección, categoría, y cuando corresponde, nombre/teléfono de quien reportó) — los mismos datos ya visibles en la plataforma web para tu rol.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Qué NO hace la app</h2>
+    <ul>
+      <li>No rastrea tu ubicación en segundo plano ni en ningún momento — no se solicita permiso de ubicación.</li>
+      <li>No accede a tus contactos, calendario ni otras apps.</li>
+      <li>No comparte tus datos con terceros distintos de tu municipalidad y de los proveedores técnicos estrictamente necesarios para operar (hosting, almacenamiento de archivos, servicio de notificaciones push).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Permisos del dispositivo</h2>
+    <ul>
+      <li><strong>Cámara y galería</strong>: solo se solicitan al momento de adjuntar una foto de evidencia — puedes negarlos y seguir usando el resto de la app.</li>
+      <li><strong>Notificaciones</strong>: opcional; si las rechazas, la app sigue funcionando normalmente, solo dejas de recibir avisos de nuevas asignaciones.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Cuánto tiempo se conservan los datos</h2>
+    <p>
+      Los datos siguen la misma política de retención que la plataforma web de
+      AlertaComunal. El token de push se elimina automáticamente al cerrar sesión
+      desde la app.
+    </p>
+  </section>
+
+  <section>
+    <h2>Contacto</h2>
+    <p>
+      Para consultas sobre esta política o para ejercer derechos sobre tus datos,
+      escribe a <a href="mailto:tecnico@elementalpro.cl">tecnico@elementalpro.cl</a>.
+    </p>
+  </section>
+
+  <footer>AlertaComunal Operador — Elemental Pro</footer>
+</div>
+</body>
+</html>
