@@ -129,6 +129,7 @@ export default async function MunicipalidadDetailPage({
             <MunicipalityToggle id={municipality.id} active={municipality.active} />
             <Link href={`/admin/municipalidades/${id}/branding`} className="btn-secondary text-sm">Marca</Link>
             <Link href={`/admin/municipalidades/${id}/motivos-cierre`} className="btn-secondary text-sm">Motivos de cierre</Link>
+            <Link href={`/admin/municipalidades/${id}/plan`} className="btn-secondary text-sm">Plan y uso</Link>
             <Link href={`/admin/municipalidades/${id}/templates`} className="btn-secondary text-sm">Templates correo</Link>
             <Link href={`/admin/municipalidades/${id}/webhook`} className="btn-secondary text-sm">Webhook</Link>
             <Link href={`/admin/municipalidades/${id}/editar`} className="btn-secondary text-sm">Editar</Link>

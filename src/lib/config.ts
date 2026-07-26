@@ -64,6 +64,13 @@ export const turnstileConfig = {
   },
 }
 
+// Sitio de la empresa enlazado desde el badge "Powered by Elemental Pro" que
+// muestran las municipalidades en plan Gratuito (ver src/lib/plans.ts). Sin
+// configurar, el badge se muestra como texto plano sin link.
+export const companyBrandingConfig = {
+  websiteUrl: process.env.NEXT_PUBLIC_COMPANY_WEBSITE_URL || '',
+}
+
 // Monitoreo de errores y performance (Sentry). Opcional — sin DSN configurado,
 // Sentry.init() recibe dsn: '' y queda deshabilitado (no envía nada), igual
 // que el resto de las integraciones opcionales de este archivo.

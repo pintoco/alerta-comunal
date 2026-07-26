@@ -183,6 +183,15 @@ export default function Sidebar({ userRole, userName, municipalityId, municipali
                   </svg>
                   Motivos de cierre
                 </Link>
+                <Link
+                  href={`/admin/municipalidades/${municipalityId}/plan`}
+                  className={navLinkClass(`/admin/municipalidades/${municipalityId}/plan`)}
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M9 17V9m4 8V5m4 12v-6" />
+                  </svg>
+                  Plan y uso
+                </Link>
               </>
             )}
           </div>

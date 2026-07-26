@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { EMERGENCY_TYPE_LABELS, STATUS_LABELS } from '@/lib/utils'
 import type { Emergency } from '@/types'
+import { PLAN_LIMITS, type SubscriptionPlanId } from '@/lib/plans'
+import { companyBrandingConfig } from '@/lib/config'
 
 interface MunicipalityOption {
   slug: string
   name: string
   logoUrl: string | null
   primaryColor: string | null
+  plan: SubscriptionPlanId
 }
 
 const MapWrapper = dynamic(() => import('@/components/map/MapWrapper'), {
@@ -89,6 +92,7 @@ export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaP
   const branding = municipalitySlug
     ? municipalities.find((m) => m.slug === municipalitySlug)
     : undefined
+  const showBadge = branding ? PLAN_LIMITS[branding.plan]?.showBadge : false
 
   const activas = emergencies.filter((e) => e.status === 'NUEVA' || e.status === 'EN_ATENCION')
   const enAtencion = emergencies.filter((e) => e.status === 'EN_ATENCION').length
@@ -269,6 +273,24 @@ export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaP
           Para reportar una nueva emergencia{' '}
           <a href={reportarHref} className="text-blue-500 hover:underline">haga clic aquí</a>.
         </p>
+
+        {showBadge && (
+          <p className="text-center text-xs text-gray-400 pb-4">
+            Plataforma proporcionada por{' '}
+            {companyBrandingConfig.websiteUrl ? (
+              <a
+                href={companyBrandingConfig.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-gray-600"
+              >
+                Elemental Pro
+              </a>
+            ) : (
+              'Elemental Pro'
+            )}
+          </p>
+        )}
       </div>
     </div>
   )

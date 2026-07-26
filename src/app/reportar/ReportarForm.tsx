@@ -9,6 +9,8 @@ import { EMERGENCY_TYPE_LABELS, EMERGENCY_TYPES } from '@/lib/utils'
 import Button from '@/components/ui/Button'
 import LocationPicker, { type Coords } from '@/components/emergencies/LocationPicker'
 import { CHILE_REGIONS_COMMUNES } from '@/data/chile-regions-communes'
+import { PLAN_LIMITS, type SubscriptionPlanId } from '@/lib/plans'
+import { companyBrandingConfig } from '@/lib/config'
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ''
 
@@ -34,6 +36,7 @@ interface MunicipalityBranding {
   name: string
   logoUrl: string | null
   primaryColor: string | null
+  plan: SubscriptionPlanId
 }
 
 interface ReportarFormProps {
@@ -176,6 +179,7 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
 
   const consultaHref = '/consulta'
   const mapaHref = municipalitySlug ? `/mapa-publico/${municipalitySlug}` : '/mapa-publico'
+  const showBadge = branding ? PLAN_LIMITS[branding.plan]?.showBadge : false
 
   if (submitted) {
     return (
@@ -426,6 +430,24 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
             Enviar reporte de emergencia
           </Button>
         </form>
+
+        {showBadge && (
+          <p className="text-center text-xs text-gray-400 pt-6 pb-2">
+            Plataforma proporcionada por{' '}
+            {companyBrandingConfig.websiteUrl ? (
+              <a
+                href={companyBrandingConfig.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-gray-600"
+              >
+                Elemental Pro
+              </a>
+            ) : (
+              'Elemental Pro'
+            )}
+          </p>
+        )}
       </div>
     </div>
   )

@@ -334,6 +334,7 @@ Accede a [http://localhost:3000](http://localhost:3000)
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile para el CAPTCHA adaptativo de `/reportar`. Opcionales — sin ambas, el CAPTCHA nunca se exige. | Crear sitio en el dashboard de Cloudflare |
 | `NEXT_PUBLIC_SENTRY_DSN` | DSN del proyecto en Sentry (monitoreo de errores). Opcional — sin ella, Sentry queda deshabilitado. | Crear proyecto en [sentry.io](https://sentry.io) |
 | `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | Solo para subir source maps en el build (stack traces legibles). Opcionales — sin las tres, el build funciona igual y Sentry recibe los errores minificados. | Panel de Sentry → Settings → Auth Tokens |
+| `NEXT_PUBLIC_COMPANY_WEBSITE_URL` | URL enlazada desde el badge "Powered by Elemental Pro" del plan Gratuito. Opcional — sin ella, el badge se muestra como texto plano sin link. | `https://elementalpro.cl` |
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_PUBLIC_URL` | Requeridas solo si `STORAGE_PROVIDER=s3`. En AWS, `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` pueden omitirse: la instancia EC2 usa su IAM role automáticamente. | Ver sección Almacenamiento |
 | `NEXT_PUBLIC_DEMO_MODE` | `true` muestra el panel QuickLogin en la página principal. **No usar en producción real.** | `true` / `false` |
 
@@ -686,6 +687,7 @@ Pasos: desplegar este servidor en cualquier lado accesible por `https://` → cr
 - [x] **Monitoreo de errores en producción** (Sentry): captura excepciones de servidor, edge y cliente vía `instrumentation.ts`/`instrumentation-client.ts`, Session Replay solo en errores, y `error.tsx`/`global-error.tsx` conectados — activo en producción con `NEXT_PUBLIC_SENTRY_DSN`
 - [x] **Branding por municipalidad**: logo + color de acento, visibles en `/reportar/[slug]` y `/mapa-publico/[slug]`; autogestionable por ADMIN de su propia municipalidad o por SUPER_ADMIN
 - [x] **Motivos de cierre configurables por municipalidad**: lista propia por municipio, obligatoria (junto a las observaciones de texto libre) al cerrar una emergencia — aparece en el detalle, el reporte imprimible y el CSV exportado
+- [x] **Planes/límites SaaS informativos**: 3 planes (Gratuito/Básico/Pro) asignados manualmente por SUPER_ADMIN desde `/admin/municipalidades/[id]/plan`, con barras de uso vs. límite (emergencias del mes, usuarios activos, almacenamiento) sin bloquear nada al superarse. El plan Gratuito muestra un badge fijo "Powered by Elemental Pro" (no removible por el ADMIN municipal) en `/reportar/[slug]` y `/mapa-publico/[slug]`; planes pagos lo ocultan. Sin pasarela de pago integrada — el cobro sigue siendo manual.
 
 ### Corto plazo (próximos sprints)
 
@@ -694,7 +696,6 @@ Pasos: desplegar este servidor en cualquier lado accesible por `https://` → cr
 - [ ] Automatizar la política de retención de datos del reportante (job de anonimización + cron en EC2/Terraform — ver sección "Retención de datos")
 - [ ] Categorías de emergencia configurables por municipalidad (además del listado fijo actual) — fase 2 de "Flexibilidad comercial", pendiente por tocar un enum usado en ~15 archivos
 - [ ] Unidades operacionales como etiqueta organizativa de usuarios — fase 2 de "Flexibilidad comercial"
-- [ ] Planes/límites SaaS informativos (uso vs. límite por municipalidad) — quedó fuera de esta ronda de "Flexibilidad comercial" a pedido explícito
 
 ### Largo plazo
 

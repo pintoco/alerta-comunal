@@ -28,6 +28,8 @@ export type TaskStatus = 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADA' | 'CANCELADA'
 
 export type EmailTemplateType = 'ASSIGNMENT' | 'NEW_REPORT'
 
+export type SubscriptionPlanId = 'GRATUITO' | 'BASICO' | 'PRO'
+
 export interface Municipality {
   id: string
   name: string
@@ -37,6 +39,7 @@ export interface Municipality {
   active: boolean
   logoUrl?: string | null
   primaryColor?: string | null
+  plan?: SubscriptionPlanId
   createdAt: string
   updatedAt: string
 }
