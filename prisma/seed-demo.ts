@@ -8,6 +8,7 @@ import {
   TaskStatus,
 } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { randomBytes } from 'crypto'
 
 const prisma = new PrismaClient()
 
@@ -248,7 +249,12 @@ export default async function seedDemo() {
     const existing = await prisma.emergency.findUnique({ where: { code: emergencyData.code } })
     if (existing) continue
 
-    const emergency = await prisma.emergency.create({ data: emergencyData as any })
+    // publicToken es obligatorio y único desde la migración de Sprint 2
+    // (backing /consulta) — este seed no pasaba por ahí y quedaba roto
+    // desde entonces; nadie lo había corrido de punta a punta.
+    const emergency = await prisma.emergency.create({
+      data: { ...emergencyData, publicToken: randomBytes(18).toString('base64url') } as any,
+    })
     created++
 
     if (emergency.code === 'EMG-2026-0001') {
