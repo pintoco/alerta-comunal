@@ -48,6 +48,19 @@ resource "aws_wafv2_web_acl" "main" {
             count {}
           }
         }
+
+        # El contenido binario de imágenes subidas (logos de branding, fotos de
+        # evidencia) genera falsos positivos de XSS heurístico contra bytes de
+        # archivos de imagen — confirmado en producción bloqueando la subida de
+        # logo de marca por municipalidad (Sprint 4). La defensa real contra XSS
+        # es la validación de tipo MIME/extensión en src/lib/storage y el escape
+        # por defecto de React, no esta regla de inspección de body.
+        rule_action_override {
+          name = "CrossSiteScripting_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
     visibility_config {
