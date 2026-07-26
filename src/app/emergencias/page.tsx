@@ -19,7 +19,7 @@ interface PageProps {
     search?: string
     status?: string
     priority?: string
-    type?: string
+    category?: string
     sector?: string
     desde?: string
     hasta?: string
@@ -58,7 +58,7 @@ async function EmergencyList({
   }
   if (searchParams.status) where.status = searchParams.status
   if (searchParams.priority) where.priority = searchParams.priority
-  if (searchParams.type) where.type = searchParams.type
+  if (searchParams.category) where.category = { label: { equals: searchParams.category, mode: 'insensitive' } }
   if (searchParams.sector) where.sector = { contains: searchParams.sector, mode: 'insensitive' }
 
   if (searchParams.desde || searchParams.hasta) {
@@ -85,6 +85,7 @@ async function EmergencyList({
         assignedTo: {
           select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true },
         },
+        category: { select: { id: true, label: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -101,7 +102,7 @@ async function EmergencyList({
     if (searchParams.search) params.set('search', searchParams.search)
     if (searchParams.status) params.set('status', searchParams.status)
     if (searchParams.priority) params.set('priority', searchParams.priority)
-    if (searchParams.type) params.set('type', searchParams.type)
+    if (searchParams.category) params.set('category', searchParams.category)
     if (searchParams.sector) params.set('sector', searchParams.sector)
     if (searchParams.desde) params.set('desde', searchParams.desde)
     if (searchParams.hasta) params.set('hasta', searchParams.hasta)

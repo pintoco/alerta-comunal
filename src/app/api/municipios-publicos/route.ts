@@ -19,9 +19,25 @@ export async function GET(request: Request) {
 
   const municipalities = await prisma.municipality.findMany({
     where: { active: true },
-    select: { slug: true, name: true, logoUrl: true, primaryColor: true, plan: true },
+    select: {
+      slug: true,
+      name: true,
+      logoUrl: true,
+      primaryColor: true,
+      plan: true,
+      emergencyCategories: {
+        where: { active: true },
+        select: { id: true, label: true },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      },
+    },
     orderBy: { name: 'asc' },
   })
 
-  return NextResponse.json(municipalities)
+  const result = municipalities.map(({ emergencyCategories, ...m }) => ({
+    ...m,
+    categories: emergencyCategories,
+  }))
+
+  return NextResponse.json(result)
 }

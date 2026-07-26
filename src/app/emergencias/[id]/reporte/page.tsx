@@ -4,7 +4,7 @@ import { getSession } from '@/lib/auth'
 import { canAccessEmergency } from '@/lib/tenant'
 import { redactPII } from '@/lib/pii'
 import {
-  EMERGENCY_TYPE_LABELS,
+  getEmergencyCategoryLabel,
   PRIORITY_LABELS,
   STATUS_LABELS,
   TASK_STATUS_LABELS,
@@ -30,6 +30,7 @@ export default async function ReportePage({
       assignedTo: { select: { name: true, email: true } },
       municipality: { select: { name: true, commune: true, region: true } },
       closingReason: { select: { label: true } },
+      category: { select: { label: true } },
       evidences: { orderBy: { createdAt: 'asc' } },
       tasks: {
         include: { assignedTo: { select: { name: true } } },
@@ -109,7 +110,7 @@ export default async function ReportePage({
           <div className="w-px h-10 bg-gray-300" />
           <div>
             <p className="text-xs text-gray-500 uppercase font-semibold">Tipo</p>
-            <p className="font-bold text-lg">{EMERGENCY_TYPE_LABELS[emergency.type]}</p>
+            <p className="font-bold text-lg">{getEmergencyCategoryLabel(emergency)}</p>
           </div>
           <div className="w-px h-10 bg-gray-300" />
           <div>

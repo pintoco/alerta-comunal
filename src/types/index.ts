@@ -51,6 +51,8 @@ export interface User {
   role: UserRole
   active: boolean
   municipalityId?: string | null
+  unitId?: string | null
+  unit?: { id: string; label: string } | null
   createdAt: string
   updatedAt: string
 }
@@ -60,7 +62,10 @@ export interface Emergency {
   code: string
   title: string
   description: string
-  type: EmergencyType
+  /** @deprecated Legado — reemplazado por categoryId. Solo lectura en emergencias históricas. */
+  type?: EmergencyType | null
+  categoryId?: string | null
+  category?: { id: string; label: string } | null
   priority: Priority
   status: EmergencyStatus
   address: string
@@ -159,6 +164,6 @@ export interface EmergencyFilters {
   search?: string
   status?: EmergencyStatus | ''
   priority?: Priority | ''
-  type?: EmergencyType | ''
+  category?: string
   sector?: string
 }

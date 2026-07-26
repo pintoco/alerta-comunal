@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Emergency, Task, Evidence, User } from '@/types'
 import {
-  EMERGENCY_TYPE_LABELS,
+  getEmergencyCategoryLabel,
   STATUS_LABELS,
   PRIORITY_LABELS,
   formatDate,
@@ -147,7 +147,7 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
         <div className="p-6 max-w-7xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{emergency.title}</h1>
-            <p className="text-gray-500 mt-1">{EMERGENCY_TYPE_LABELS[emergency.type]}</p>
+            <p className="text-gray-500 mt-1">{getEmergencyCategoryLabel(emergency)}</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -229,7 +229,7 @@ export default function EmergenciaDetailPage({ params }: { params: Promise<{ id:
                   </div>
                   <div>
                     <dt className="text-gray-500">Tipo</dt>
-                    <dd className="text-gray-900">{EMERGENCY_TYPE_LABELS[emergency.type]}</dd>
+                    <dd className="text-gray-900">{getEmergencyCategoryLabel(emergency)}</dd>
                   </div>
                   <div>
                     <dt className="text-gray-500">Origen</dt>

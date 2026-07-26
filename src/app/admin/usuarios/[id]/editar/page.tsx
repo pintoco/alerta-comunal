@@ -23,6 +23,7 @@ export default async function EditarUsuarioPage({
     where: { id },
     select: {
       id: true, name: true, email: true, role: true, active: true, municipalityId: true,
+      unitId: true,
       emailOnAssigned: true, emailOnNewReport: true,
       municipality: { select: { name: true } },
     },
@@ -78,6 +79,7 @@ export default async function EditarUsuarioPage({
               email: user.email,
               role: user.role,
               municipalityId: user.municipalityId,
+              unitId: user.unitId,
               active: user.active,
               emailOnAssigned: user.emailOnAssigned,
               emailOnNewReport: user.emailOnNewReport,

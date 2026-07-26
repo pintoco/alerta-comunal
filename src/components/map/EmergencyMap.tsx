@@ -6,7 +6,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import Link from 'next/link'
 import type { Emergency, Priority } from '@/types'
-import { PRIORITY_LABELS, STATUS_LABELS, EMERGENCY_TYPE_LABELS } from '@/lib/utils'
+import { PRIORITY_LABELS, STATUS_LABELS, getEmergencyCategoryLabel } from '@/lib/utils'
 
 // Fix Leaflet default icon issue in Next.js
 const fixLeafletIcons = () => {
@@ -97,7 +97,7 @@ export default function EmergencyMap({
                 <p className="font-mono text-xs text-gray-500 mb-1">{emergency.code}</p>
                 <p className="font-semibold text-gray-900 mb-2">{emergency.title}</p>
                 <div className="space-y-1 text-xs text-gray-600">
-                  <p><span className="font-medium">Tipo:</span> {EMERGENCY_TYPE_LABELS[emergency.type]}</p>
+                  <p><span className="font-medium">Tipo:</span> {getEmergencyCategoryLabel(emergency)}</p>
                   <p><span className="font-medium">Estado:</span> {STATUS_LABELS[emergency.status]}</p>
                   <p>
                     <span className="font-medium">Prioridad:</span>{' '}

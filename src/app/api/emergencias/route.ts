@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const search = searchParams.get('search') || ''
   const status = searchParams.get('status') || ''
   const priority = searchParams.get('priority') || ''
-  const type = searchParams.get('type') || ''
+  const category = searchParams.get('category') || ''
   const sector = searchParams.get('sector') || ''
   const desde = searchParams.get('desde') || ''
   const hasta = searchParams.get('hasta') || ''
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 
   if (status) where.status = status
   if (priority) where.priority = priority
-  if (type) where.type = type
+  if (category) where.category = { label: { equals: category, mode: 'insensitive' } }
   if (sector) where.sector = { contains: sector, mode: 'insensitive' }
 
   if (desde || hasta) {
@@ -60,6 +60,7 @@ export async function GET(request: Request) {
       where,
       include: {
         assignedTo: { select: { id: true, name: true, email: true } },
+        category: { select: { id: true, label: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -109,6 +110,20 @@ export async function POST(request: Request) {
 
     const data = emergencyData
 
+    // Validate categoryId belongs to the target municipality
+    if (data.categoryId) {
+      const category = await prisma.emergencyCategory.findUnique({
+        where: { id: data.categoryId },
+        select: { municipalityId: true },
+      })
+      if (!category || category.municipalityId !== municipalityId) {
+        return NextResponse.json(
+          { error: 'La categoría seleccionada no pertenece a esta municipalidad' },
+          { status: 400 }
+        )
+      }
+    }
+
     // Validate assignedToId belongs to the target municipality
     if (data.assignedToId && municipalityId) {
       const targetUser = await prisma.user.findUnique({
@@ -131,7 +146,12 @@ export async function POST(request: Request) {
 
     const MAX_ATTEMPTS = 3
     let lastError: unknown
-    let emergency: Awaited<ReturnType<typeof prisma.emergency.create>> | null = null
+    let emergency: Prisma.EmergencyGetPayload<{
+      include: {
+        assignedTo: { select: { id: true; name: true; email: true } }
+        category: { select: { id: true; label: true } }
+      }
+    }> | null = null
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const code = await generateEmergencyCode()
@@ -146,6 +166,7 @@ export async function POST(request: Request) {
           } as any,
           include: {
             assignedTo: { select: { id: true, name: true, email: true } },
+            category: { select: { id: true, label: true } },
           },
         })
         break
@@ -185,7 +206,7 @@ export async function POST(request: Request) {
         emergency: {
           id: emergency.id,
           code: emergency.code,
-          type: emergency.type,
+          category: emergency.category?.label ?? null,
           priority: emergency.priority,
           status: emergency.status,
           origin: emergency.origin,
@@ -267,7 +288,7 @@ export async function POST(request: Request) {
           const emailResult = await sendEmergencyAssignmentEmail(assignedUser.email, {
             id: emergency.id,
             code: emergency.code,
-            type: emergency.type,
+            categoryLabel: emergency.category?.label ?? null,
             priority: emergency.priority,
             status: emergency.status,
             region: emergency.region,
@@ -312,7 +333,7 @@ export async function POST(request: Request) {
         emergency: {
           id: emergency.id,
           code: emergency.code,
-          type: emergency.type,
+          category: emergency.category?.label ?? null,
           priority: emergency.priority,
           status: emergency.status,
           address: emergency.address,
@@ -357,7 +378,7 @@ export async function POST(request: Request) {
             await sendEmergencyAssignmentEmail(coUser.email, {
               id: emergency.id,
               code: emergency.code,
-              type: emergency.type,
+              categoryLabel: emergency.category?.label ?? null,
               priority: emergency.priority,
               status: emergency.status,
               region: emergency.region,

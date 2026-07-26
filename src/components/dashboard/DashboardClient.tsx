@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import StatsCard from '@/components/dashboard/StatsCard'
 import RecentEmergencies from '@/components/dashboard/RecentEmergencies'
-import type { Emergency, Priority, EmergencyType } from '@/types'
+import type { Emergency, Priority } from '@/types'
 import type { DashboardData } from '@/lib/dashboard'
-import { EMERGENCY_TYPE_LABELS, PRIORITY_LABELS } from '@/lib/utils'
+import { PRIORITY_LABELS } from '@/lib/utils'
 
 const PRIORITY_BAR_COLORS: Record<string, string> = {
   CRITICA: 'bg-red-500',
@@ -133,7 +133,7 @@ export default function DashboardClient({ initialData, canCreate }: Props) {
     },
   ]
 
-  const maxTypeCount = Math.max(...data.byType.map((t) => t.count), 1)
+  const maxCategoryCount = Math.max(...data.byCategory.map((t) => t.count), 1)
   const priorityOrder: Priority[] = ['CRITICA', 'ALTA', 'MEDIA', 'BAJA']
 
   return (
@@ -200,20 +200,20 @@ export default function DashboardClient({ initialData, canCreate }: Props) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card p-6">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Por tipo de emergencia</h2>
-            {data.byType.length === 0 ? (
+            {data.byCategory.length === 0 ? (
               <p className="text-sm text-gray-400">Sin datos</p>
             ) : (
               <div className="space-y-3">
-                {data.byType.slice(0, 8).map((item) => (
-                  <div key={item.type}>
+                {data.byCategory.slice(0, 8).map((item) => (
+                  <div key={item.label}>
                     <div className="flex justify-between text-xs text-gray-600 mb-1">
-                      <span>{EMERGENCY_TYPE_LABELS[item.type as EmergencyType] ?? item.type}</span>
+                      <span>{item.label}</span>
                       <span className="font-semibold">{item.count}</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2">
                       <div
                         className="bg-blue-500 h-2 rounded-full transition-all"
-                        style={{ width: `${(item.count / maxTypeCount) * 100}%` }}
+                        style={{ width: `${(item.count / maxCategoryCount) * 100}%` }}
                       />
                     </div>
                   </div>

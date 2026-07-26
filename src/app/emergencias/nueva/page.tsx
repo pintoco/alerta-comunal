@@ -22,6 +22,24 @@ export default async function NuevaEmergenciaPage() {
     orderBy: { name: 'asc' },
   })
 
+  // Misma resolución de municipalidad que usa POST /api/emergencias: la
+  // sesión, o "demo" para SUPER_ADMIN (que no tiene municipalidad propia) —
+  // las categorías mostradas deben ser las de la municipalidad donde la
+  // emergencia realmente va a quedar creada.
+  let effectiveMunicipalityId = session.municipalityId ?? null
+  if (!effectiveMunicipalityId && session.role === 'SUPER_ADMIN') {
+    const demo = await prisma.municipality.findFirst({ where: { slug: 'demo' }, select: { id: true } })
+    effectiveMunicipalityId = demo?.id ?? null
+  }
+
+  const categories = effectiveMunicipalityId
+    ? await prisma.emergencyCategory.findMany({
+        where: { municipalityId: effectiveMunicipalityId, active: true },
+        select: { id: true, label: true },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      })
+    : []
+
   return (
     <MainLayout>
       <div className="max-w-4xl mx-auto">
@@ -30,7 +48,7 @@ export default async function NuevaEmergenciaPage() {
           <p className="text-gray-500 text-sm mt-1">Complete los datos para registrar una nueva emergencia</p>
         </div>
 
-        <EmergencyForm users={users} />
+        <EmergencyForm users={users} categories={categories} />
       </div>
     </MainLayout>
   )

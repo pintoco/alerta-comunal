@@ -1,15 +1,24 @@
 'use client'
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { useCallback } from 'react'
-import { EMERGENCY_TYPE_LABELS, STATUS_LABELS, PRIORITY_LABELS } from '@/lib/utils'
-import type { EmergencyType, EmergencyStatus, Priority } from '@/types'
+import { useCallback, useEffect, useState } from 'react'
+import { STATUS_LABELS, PRIORITY_LABELS } from '@/lib/utils'
+import type { EmergencyStatus, Priority } from '@/types'
 
 export default function EmergencyFilters() {
   const router = useRouter()
   const pathname = usePathname()
   const rawSearchParams = useSearchParams()
   const searchParams = rawSearchParams ?? new URLSearchParams()
+
+  const [categories, setCategories] = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/emergencias/categorias')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((labels: string[]) => setCategories(labels))
+      .catch(() => {})
+  }, [])
 
   const createQueryString = useCallback(
     (name: string, value: string) => {
@@ -33,7 +42,7 @@ export default function EmergencyFilters() {
     searchParams.get('search') ||
     searchParams.get('status') ||
     searchParams.get('priority') ||
-    searchParams.get('type') ||
+    searchParams.get('category') ||
     searchParams.get('sector') ||
     searchParams.get('desde') ||
     searchParams.get('hasta')
@@ -77,13 +86,13 @@ export default function EmergencyFilters() {
         </select>
 
         <select
-          value={searchParams.get('type') || ''}
-          onChange={(e) => handleChange('type', e.target.value)}
+          value={searchParams.get('category') || ''}
+          onChange={(e) => handleChange('category', e.target.value)}
           className="form-input"
         >
           <option value="">Todos los tipos</option>
-          {(Object.keys(EMERGENCY_TYPE_LABELS) as EmergencyType[]).map((t) => (
-            <option key={t} value={t}>{EMERGENCY_TYPE_LABELS[t]}</option>
+          {categories.map((label) => (
+            <option key={label} value={label}>{label}</option>
           ))}
         </select>
 

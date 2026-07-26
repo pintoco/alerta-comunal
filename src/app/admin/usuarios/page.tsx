@@ -41,6 +41,7 @@ export default async function AdminUsuariosPage() {
       id: true, name: true, email: true, role: true, active: true,
       municipalityId: true,
       municipality: { select: { name: true } },
+      unit: { select: { label: true } },
       createdAt: true,
     },
   })
@@ -77,6 +78,7 @@ export default async function AdminUsuariosPage() {
                 {session.role === 'SUPER_ADMIN' && (
                   <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Municipalidad</th>
                 )}
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Unidad</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
                 <th className="text-right px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Acciones</th>
               </tr>
@@ -98,6 +100,9 @@ export default async function AdminUsuariosPage() {
                       {u.municipality?.name ?? <span className="text-gray-400 italic">Sin municipalidad</span>}
                     </td>
                   )}
+                  <td className="px-6 py-4 text-gray-600 text-xs">
+                    {u.unit?.label ?? <span className="text-gray-400 italic">Sin asignar</span>}
+                  </td>
                   <td className="px-6 py-4">
                     <UserToggle id={u.id} active={u.active} />
                   </td>
@@ -115,7 +120,7 @@ export default async function AdminUsuariosPage() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={session.role === 'SUPER_ADMIN' ? 5 : 4} className="px-6 py-8 text-center text-sm text-gray-400">
+                  <td colSpan={session.role === 'SUPER_ADMIN' ? 6 : 5} className="px-6 py-8 text-center text-sm text-gray-400">
                     No hay usuarios registrados.
                   </td>
                 </tr>

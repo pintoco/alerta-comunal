@@ -11,6 +11,31 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
+// Mismos defaults que crea /api/admin/municipalidades al crear una
+// municipalidad real — el seed demo no pasa por esa ruta (usa su propio
+// upsert por slug), así que hay que sembrarlos acá también.
+const DEFAULT_CLOSING_REASONS = [
+  'Resuelto en terreno',
+  'Derivado a otra entidad',
+  'Reporte duplicado',
+  'Sin mérito',
+  'Otro',
+]
+
+const DEFAULT_EMERGENCY_CATEGORIES = [
+  'Incendio',
+  'Inundación',
+  'Caída de árbol',
+  'Corte de camino',
+  'Corte eléctrico',
+  'Daño en vivienda',
+  'Emergencia social',
+  'Accidente',
+  'Riesgo sanitario',
+  'Infraestructura pública',
+  'Otro',
+]
+
 /**
  * Seed de demostración: municipalidad demo, 5 usuarios con contraseñas fijas
  * y emergencias de ejemplo. Solo para desarrollo local (SEED_DEMO=true) —
@@ -32,6 +57,22 @@ export default async function seedDemo() {
     },
   })
   console.log(`  ✓ Municipalidad: ${municipality.name} (${municipality.slug})`)
+
+  // Motivos de cierre y categorías de emergencia por defecto (idempotente —
+  // solo si la municipalidad demo todavía no tiene ninguno).
+  if ((await prisma.closingReason.count({ where: { municipalityId: municipality.id } })) === 0) {
+    await prisma.closingReason.createMany({
+      data: DEFAULT_CLOSING_REASONS.map((label, order) => ({ municipalityId: municipality.id, label, order })),
+    })
+  }
+  if ((await prisma.emergencyCategory.count({ where: { municipalityId: municipality.id } })) === 0) {
+    await prisma.emergencyCategory.createMany({
+      data: DEFAULT_EMERGENCY_CATEGORIES.map((label, order) => ({ municipalityId: municipality.id, label, order })),
+    })
+  }
+  const categories = await prisma.emergencyCategory.findMany({ where: { municipalityId: municipality.id } })
+  const categoryIdByLabel = new Map(categories.map((c) => [c.label, c.id]))
+  console.log(`  ✓ Motivos de cierre y categorías de emergencia por defecto`)
 
   // SUPER_ADMIN (sin municipalidad)
   const superAdminPassword = await bcrypt.hash('SuperAdmin123', 10)
@@ -111,6 +152,7 @@ export default async function seedDemo() {
       description:
         'Se reporta incendio en tercer piso de edificio residencial. Humo visible desde la calle. Vecinos evacuados preventivamente.',
       type: EmergencyType.INCENDIO,
+      categoryId: categoryIdByLabel.get('Incendio'),
       priority: Priority.CRITICA,
       status: EmergencyStatus.EN_ATENCION,
       address: "Av. O'Higgins 1245, Piso 3",
@@ -129,6 +171,7 @@ export default async function seedDemo() {
       description:
         'Desbordamiento de canal causa inundación en calles del sector. Varios vehículos varados. Se requiere maquinaria para despejar.',
       type: EmergencyType.INUNDACION,
+      categoryId: categoryIdByLabel.get('Inundación'),
       priority: Priority.ALTA,
       status: EmergencyStatus.EN_ATENCION,
       address: 'Calle Las Flores 340',
@@ -147,6 +190,7 @@ export default async function seedDemo() {
       description:
         'Árbol de gran tamaño cayó sobre la calzada durante madrugada bloqueando el tránsito vehicular completo.',
       type: EmergencyType.CAIDA_ARBOL,
+      categoryId: categoryIdByLabel.get('Caída de árbol'),
       priority: Priority.MEDIA,
       status: EmergencyStatus.NUEVA,
       address: 'Calle Los Aromos 890',
@@ -164,6 +208,7 @@ export default async function seedDemo() {
       description:
         'Corte de suministro eléctrico afecta a más de 200 viviendas del sector sur. Se coordinó con empresa distribuidora.',
       type: EmergencyType.CORTE_ELECTRICO,
+      categoryId: categoryIdByLabel.get('Corte eléctrico'),
       priority: Priority.ALTA,
       status: EmergencyStatus.RESUELTA,
       address: 'Sector Sur, Manzanas 12-18',
@@ -180,6 +225,7 @@ export default async function seedDemo() {
       description:
         'Colapso parcial de techo en vivienda social. Familia con 3 menores afectada, requirió traslado temporal.',
       type: EmergencyType.DANO_VIVIENDA,
+      categoryId: categoryIdByLabel.get('Daño en vivienda'),
       priority: Priority.ALTA,
       status: EmergencyStatus.CERRADA,
       address: 'Villa Los Pinos, Casa 45',

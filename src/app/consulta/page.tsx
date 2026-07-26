@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { EMERGENCY_TYPE_LABELS, STATUS_LABELS, PRIORITY_LABELS, formatDate } from '@/lib/utils'
-import type { EmergencyType, EmergencyStatus, Priority } from '@/types'
+import { STATUS_LABELS, PRIORITY_LABELS, formatDate } from '@/lib/utils'
+import type { EmergencyStatus, Priority } from '@/types'
 
 interface PublicEmergency {
   code: string
-  type: EmergencyType
+  categoryLabel: string
   status: EmergencyStatus
   priority: Priority
   address: string
@@ -148,7 +148,7 @@ export default function ConsultaPage() {
             <div className="px-6 py-5 space-y-4">
               <div>
                 <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Tipo de emergencia</p>
-                <p className="text-gray-900 font-medium">{EMERGENCY_TYPE_LABELS[result.type]}</p>
+                <p className="text-gray-900 font-medium">{result.categoryLabel}</p>
               </div>
 
               <div>

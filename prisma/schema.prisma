@@ -79,11 +79,13 @@ model Municipality {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
-  users          User[]
-  emergencies    Emergency[]
-  emailTemplates MunicipalityEmailTemplate[]
-  webhook        MunicipalityWebhook?
-  closingReasons ClosingReason[]
+  users              User[]
+  emergencies        Emergency[]
+  emailTemplates     MunicipalityEmailTemplate[]
+  webhook            MunicipalityWebhook?
+  closingReasons     ClosingReason[]
+  emergencyCategories EmergencyCategory[]
+  operationalUnits   OperationalUnit[]
 }
 
 model User {
@@ -98,6 +100,10 @@ model User {
   sessionVersion Int           @default(1)
   municipalityId String?
   municipality   Municipality? @relation(fields: [municipalityId], references: [id])
+  // Etiqueta organizativa opcional (ej. "Bomberos", "Obras Públicas") — solo
+  // informativa, no cambia permisos ni enrutamiento de asignación.
+  unitId         String?
+  unit           OperationalUnit? @relation(fields: [unitId], references: [id], onDelete: SetNull)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -115,7 +121,12 @@ model Emergency {
   code           String          @unique
   title          String
   description    String
-  type           EmergencyType
+  // Legado: reemplazado por categoryId (categorías configurables por
+  // municipalidad). Se mantiene solo para lectura histórica de emergencias
+  // creadas antes de esta migración — ningún formulario nuevo lo escribe.
+  type           EmergencyType?
+  categoryId     String?
+  category       EmergencyCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   priority       Priority        @default(MEDIA)
   status         EmergencyStatus @default(NUEVA)
   address        String
@@ -253,6 +264,42 @@ model ClosingReason {
   createdAt      DateTime     @default(now())
   municipality   Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
   emergencies    Emergency[]
+
+  @@index([municipalityId])
+}
+
+// Categorías de emergencia configurables por municipalidad — reemplazan el
+// enum global fijo EmergencyType (que se mantiene solo para lectura histórica,
+// ver Emergency.type). Cada municipalidad arranca con 11 categorías por
+// defecto (mismos labels del enum anterior) y puede agregar/renombrar/
+// desactivar las suyas. `active: false` en vez de borrar, mismo motivo que
+// ClosingReason: no invalidar el categoryId de emergencias históricas.
+model EmergencyCategory {
+  id             String       @id @default(cuid())
+  municipalityId String
+  label          String
+  active         Boolean      @default(true)
+  order          Int          @default(0)
+  createdAt      DateTime     @default(now())
+  municipality   Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
+  emergencies    Emergency[]
+
+  @@index([municipalityId])
+}
+
+// Unidad operacional — etiqueta organizativa opcional para agrupar usuarios
+// dentro de una municipalidad (ej. "Bomberos", "Obras Públicas"). Sin lista
+// por defecto: cada municipalidad arranca sin unidades y arma las suyas.
+// Puramente informativa hoy, no afecta permisos ni asignación de emergencias.
+model OperationalUnit {
+  id             String       @id @default(cuid())
+  municipalityId String
+  label          String
+  active         Boolean      @default(true)
+  order          Int          @default(0)
+  createdAt      DateTime     @default(now())
+  municipality   Municipality @relation(fields: [municipalityId], references: [id], onDelete: Cascade)
+  users          User[]
 
   @@index([municipalityId])
 }

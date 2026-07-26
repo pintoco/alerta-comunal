@@ -6,7 +6,6 @@ import MainLayout from '@/components/layout/MainLayout'
 import MunicipalityToggle from '@/components/admin/MunicipalityToggle'
 import MunicipalityDeleteButton from '@/components/admin/MunicipalityDeleteButton'
 import { formatDate } from '@/lib/utils'
-import { EMERGENCY_TYPE_LABELS } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -65,7 +64,7 @@ export default async function MunicipalidadDetailPage({
     resolvedEmergencies,
     last30Days,
     closedWithDates,
-    typeDistribution,
+    typeDistributionRaw,
     activeUsersCount,
     recentEmergencies,
   ] = await Promise.all([
@@ -78,20 +77,34 @@ export default async function MunicipalidadDetailPage({
       select: { createdAt: true, closedAt: true },
     }),
     prisma.emergency.groupBy({
-      by: ['type'],
+      by: ['categoryId'],
       where: { municipalityId: id },
-      _count: { type: true },
-      orderBy: { _count: { type: 'desc' } },
-      take: 6,
+      _count: { _all: true },
     }),
     prisma.user.count({ where: { municipalityId: id, active: true } }),
     prisma.emergency.findMany({
       where: { municipalityId: id },
       orderBy: { createdAt: 'desc' },
       take: 5,
-      select: { id: true, code: true, title: true, type: true, status: true, priority: true, createdAt: true },
+      select: {
+        id: true, code: true, title: true, type: true, status: true, priority: true, createdAt: true,
+        category: { select: { id: true, label: true } },
+      },
     }),
   ])
+
+  const categoryIds = typeDistributionRaw.map((t) => t.categoryId).filter((cid): cid is string => !!cid)
+  const categoryRows = categoryIds.length
+    ? await prisma.emergencyCategory.findMany({ where: { id: { in: categoryIds } }, select: { id: true, label: true } })
+    : []
+  const labelById = new Map(categoryRows.map((c) => [c.id, c.label]))
+  const typeDistribution = typeDistributionRaw
+    .map((t) => ({
+      label: t.categoryId ? (labelById.get(t.categoryId) ?? 'Sin categoría') : 'Sin categoría',
+      count: t._count._all,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6)
 
   const resolutionRate = totalEmergencies > 0
     ? Math.round((resolvedEmergencies / totalEmergencies) * 100)
@@ -104,7 +117,7 @@ export default async function MunicipalidadDetailPage({
       }, 0) / closedWithDates.length
     : null
 
-  const typeMax = typeDistribution[0]?._count.type ?? 1
+  const typeMax = typeDistribution[0]?.count ?? 1
 
   return (
     <MainLayout>
@@ -129,6 +142,8 @@ export default async function MunicipalidadDetailPage({
             <MunicipalityToggle id={municipality.id} active={municipality.active} />
             <Link href={`/admin/municipalidades/${id}/branding`} className="btn-secondary text-sm">Marca</Link>
             <Link href={`/admin/municipalidades/${id}/motivos-cierre`} className="btn-secondary text-sm">Motivos de cierre</Link>
+            <Link href={`/admin/municipalidades/${id}/categorias`} className="btn-secondary text-sm">Categorías</Link>
+            <Link href={`/admin/municipalidades/${id}/unidades`} className="btn-secondary text-sm">Unidades operacionales</Link>
             <Link href={`/admin/municipalidades/${id}/plan`} className="btn-secondary text-sm">Plan y uso</Link>
             <Link href={`/admin/municipalidades/${id}/templates`} className="btn-secondary text-sm">Templates correo</Link>
             <Link href={`/admin/municipalidades/${id}/webhook`} className="btn-secondary text-sm">Webhook</Link>
@@ -188,11 +203,11 @@ export default async function MunicipalidadDetailPage({
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Distribución por tipo de emergencia</h2>
             <div className="space-y-2.5">
               {typeDistribution.map((t) => {
-                const pct = Math.round((t._count.type / typeMax) * 100)
+                const pct = Math.round((t.count / typeMax) * 100)
                 return (
-                  <div key={t.type} className="flex items-center gap-3">
+                  <div key={t.label} className="flex items-center gap-3">
                     <span className="text-xs text-gray-600 w-44 shrink-0 truncate">
-                      {EMERGENCY_TYPE_LABELS[t.type as keyof typeof EMERGENCY_TYPE_LABELS] ?? t.type}
+                      {t.label}
                     </span>
                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div
@@ -200,7 +215,7 @@ export default async function MunicipalidadDetailPage({
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-xs font-medium text-gray-700 w-6 text-right">{t._count.type}</span>
+                    <span className="text-xs font-medium text-gray-700 w-6 text-right">{t.count}</span>
                   </div>
                 )
               })}

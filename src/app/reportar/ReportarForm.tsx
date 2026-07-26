@@ -5,7 +5,6 @@ import Script from 'next/script'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { publicReportSchema, PublicReportFormData } from '@/lib/validations/emergency'
-import { EMERGENCY_TYPE_LABELS, EMERGENCY_TYPES } from '@/lib/utils'
 import Button from '@/components/ui/Button'
 import LocationPicker, { type Coords } from '@/components/emergencies/LocationPicker'
 import { CHILE_REGIONS_COMMUNES } from '@/data/chile-regions-communes'
@@ -37,7 +36,27 @@ interface MunicipalityBranding {
   logoUrl: string | null
   primaryColor: string | null
   plan: SubscriptionPlanId
+  categories: { id: string; label: string }[]
 }
+
+// Sin slug (/reportar sin municipalidad conocida aún), la municipalidad real
+// no se sabe client-side — el match por región/comuna ocurre en el servidor.
+// Esta lista es solo un respaldo genérico de UX; el servidor la resuelve a
+// una categoría real de la municipalidad que finalmente se determine (ver
+// POST /api/reporte-publico), degradando con gracia si no hay coincidencia.
+const GENERIC_CATEGORY_FALLBACK = [
+  'Incendio',
+  'Inundación',
+  'Caída de árbol',
+  'Corte de camino',
+  'Corte eléctrico',
+  'Daño en vivienda',
+  'Emergencia social',
+  'Accidente',
+  'Riesgo sanitario',
+  'Infraestructura pública',
+  'Otro',
+]
 
 interface ReportarFormProps {
   /** Cuando viene desde /reportar/[slug]: fija la municipalidad y oculta región/comuna. */
@@ -92,8 +111,14 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<PublicReportFormData>({
     resolver: zodResolver(publicReportSchema),
-    defaultValues: { type: 'OTRO', region: '', commune: '' },
+    defaultValues: { category: 'Otro', region: '', commune: '' },
   })
+
+  useEffect(() => {
+    if (!branding?.categories.length) return
+    const otro = branding.categories.find((c) => c.label.toLowerCase() === 'otro')
+    setValue('categoryId', otro?.id ?? branding.categories[0].id)
+  }, [branding, setValue])
 
   const selectedRegion = watch('region')
   const selectedCommune = watch('commune')
@@ -135,7 +160,11 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
       const formData = new FormData()
       formData.append('reporterName', data.reporterName)
       formData.append('reporterPhone', data.reporterPhone)
-      formData.append('type', data.type)
+      if (municipalitySlug && data.categoryId) {
+        formData.append('categoryId', data.categoryId)
+      } else if (data.category) {
+        formData.append('category', data.category)
+      }
       formData.append('description', data.description)
       formData.append('address', data.address)
       formData.append('dataConsent', String(data.dataConsent === true))
@@ -288,11 +317,20 @@ export default function ReportarForm({ municipalitySlug }: ReportarFormProps) {
             <h2 className="font-semibold text-gray-900">Detalles de la emergencia</h2>
             <div>
               <label className="form-label">Tipo de emergencia *</label>
-              <select {...register('type')} className="form-input">
-                {EMERGENCY_TYPES.map((t) => (
-                  <option key={t} value={t}>{EMERGENCY_TYPE_LABELS[t]}</option>
-                ))}
-              </select>
+              {municipalitySlug && branding?.categories.length ? (
+                <select {...register('categoryId')} className="form-input">
+                  {branding.categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <select {...register('category')} className="form-input">
+                  {GENERIC_CATEGORY_FALLBACK.map((label) => (
+                    <option key={label} value={label}>{label}</option>
+                  ))}
+                </select>
+              )}
+              {errors.category && <p className="form-error">{errors.category.message}</p>}
             </div>
             <div>
               <label className="form-label">Descripción *</label>

@@ -25,8 +25,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     where: { id },
     select: {
       id: true, name: true, email: true, role: true, active: true,
-      municipalityId: true, emailOnAssigned: true, emailOnNewReport: true,
+      municipalityId: true, unitId: true, emailOnAssigned: true, emailOnNewReport: true,
       municipality: { select: { id: true, name: true } },
+      unit: { select: { id: true, label: true } },
       createdAt: true, updatedAt: true,
     },
   })
@@ -84,6 +85,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       result.data.municipalityId = session.municipalityId ?? undefined
     }
 
+    // Validate unitId belongs to the effective municipality (mismo patrón que
+    // closingReasonId en estado/route.ts) — la que quedará tras este update,
+    // no la que venía en el body antes de forzar el municipio para ADMIN.
+    if (result.data.unitId) {
+      const effectiveMunicipalityId =
+        result.data.municipalityId !== undefined ? result.data.municipalityId : existing.municipalityId
+      const unit = await prisma.operationalUnit.findUnique({
+        where: { id: result.data.unitId },
+        select: { municipalityId: true },
+      })
+      if (!unit || unit.municipalityId !== effectiveMunicipalityId) {
+        return NextResponse.json(
+          { error: 'La unidad operacional no pertenece a la municipalidad de este usuario' },
+          { status: 400 }
+        )
+      }
+    }
+
     if (result.data.email && result.data.email !== existing.email) {
       const emailConflict = await prisma.user.findUnique({ where: { email: result.data.email } })
       if (emailConflict) {
@@ -106,7 +125,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       },
       select: {
         id: true, name: true, email: true, role: true, active: true,
-        municipalityId: true, emailOnAssigned: true, emailOnNewReport: true, updatedAt: true,
+        municipalityId: true, unitId: true, emailOnAssigned: true, emailOnNewReport: true, updatedAt: true,
       },
     })
 

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { Emergency } from '@/types'
-import { EMERGENCY_TYPE_LABELS, formatDate } from '@/lib/utils'
+import { getEmergencyCategoryLabel, formatDate } from '@/lib/utils'
 import StatusBadge from './StatusBadge'
 import PriorityBadge from './PriorityBadge'
 
@@ -49,7 +49,7 @@ export default function EmergencyTable({ emergencies, canEdit }: EmergencyTableP
                   <p className="text-xs text-gray-400 truncate max-w-xs">{e.address}</p>
                 </td>
                 <td className="py-3 px-4 text-gray-600 whitespace-nowrap">
-                  {EMERGENCY_TYPE_LABELS[e.type]}
+                  {getEmergencyCategoryLabel(e)}
                 </td>
                 <td className="py-3 px-4">
                   <PriorityBadge priority={e.priority} />

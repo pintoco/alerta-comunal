@@ -7,10 +7,8 @@ import { useState } from 'react'
 import { emergencySchema, EmergencyFormData } from '@/lib/validations/emergency'
 
 import {
-  EMERGENCY_TYPE_LABELS,
   PRIORITY_LABELS,
   STATUS_LABELS,
-  EMERGENCY_TYPES,
   PRIORITIES,
   STATUSES,
 } from '@/lib/utils'
@@ -22,11 +20,12 @@ import { CHILE_REGIONS_COMMUNES } from '@/data/chile-regions-communes'
 
 interface EmergencyFormProps {
   users: Pick<User, 'id' | 'name'>[]
+  categories: { id: string; label: string }[]
   initial?: Partial<Emergency>
   isEdit?: boolean
 }
 
-export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormProps) {
+export default function EmergencyForm({ users, categories, initial, isEdit }: EmergencyFormProps) {
   const router = useRouter()
   const [serverError, setServerError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -50,7 +49,7 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
     defaultValues: {
       title: initial?.title || '',
       description: initial?.description || '',
-      type: initial?.type || 'OTRO',
+      categoryId: initial?.categoryId || '',
       priority: initial?.priority || 'MEDIA',
       status: initial?.status || 'NUEVA',
       address: initial?.address || '',
@@ -146,12 +145,13 @@ export default function EmergencyForm({ users, initial, isEdit }: EmergencyFormP
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="form-label">Tipo de emergencia *</label>
-              <select {...register('type')} className="form-input">
-                {EMERGENCY_TYPES.map((t) => (
-                  <option key={t} value={t}>{EMERGENCY_TYPE_LABELS[t]}</option>
+              <select {...register('categoryId')} className="form-input">
+                <option value="">— Selecciona una categoría —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
               </select>
-              {errors.type && <p className="form-error">{errors.type.message}</p>}
+              {errors.categoryId && <p className="form-error">{errors.categoryId.message}</p>}
             </div>
 
             <div>

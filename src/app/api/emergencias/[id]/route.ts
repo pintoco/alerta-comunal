@@ -30,6 +30,7 @@ export async function GET(
       assignedTo: { select: { id: true, name: true, email: true, role: true } },
       coAssignees: { include: { user: { select: { id: true, name: true, email: true } } } },
       closingReason: { select: { id: true, label: true } },
+      category: { select: { id: true, label: true } },
       evidences: { orderBy: { createdAt: 'desc' } },
       tasks: {
         include: { assignedTo: { select: { id: true, name: true } } },
@@ -104,6 +105,20 @@ export async function PUT(
       return NextResponse.json({ error: 'Emergencia no encontrada' }, { status: 404 })
     }
 
+    // Validate categoryId belongs to the same municipality as the emergency
+    if (data.categoryId) {
+      const category = await prisma.emergencyCategory.findUnique({
+        where: { id: data.categoryId },
+        select: { municipalityId: true },
+      })
+      if (!category || category.municipalityId !== previous.municipalityId) {
+        return NextResponse.json(
+          { error: 'La categoría seleccionada no pertenece a la municipalidad de esta emergencia' },
+          { status: 400 }
+        )
+      }
+    }
+
     // Validate assignedToId belongs to the same municipality as the emergency
     if (data.assignedToId && previous.municipalityId) {
       const targetUser = await prisma.user.findUnique({
@@ -133,6 +148,7 @@ export async function PUT(
       } as any,
       include: {
         assignedTo: { select: { id: true, name: true, email: true } },
+        category: { select: { id: true, label: true } },
       },
     })
 
@@ -220,7 +236,7 @@ export async function PUT(
             await sendEmergencyAssignmentEmail(coUser.email, {
               id: emergency.id,
               code: emergency.code,
-              type: emergency.type,
+              categoryLabel: emergency.category?.label ?? null,
               priority: emergency.priority,
               status: emergency.status,
               region: emergency.region,
@@ -250,7 +266,7 @@ export async function PUT(
           const emailResult = await sendEmergencyAssignmentEmail(assignedUser.email, {
             id: emergency.id,
             code: emergency.code,
-            type: emergency.type,
+            categoryLabel: emergency.category?.label ?? null,
             priority: emergency.priority,
             status: emergency.status,
             region: emergency.region,
@@ -295,7 +311,7 @@ export async function PUT(
         emergency: {
           id: emergency.id,
           code: emergency.code,
-          type: emergency.type,
+          category: emergency.category?.label ?? null,
           priority: emergency.priority,
           status: emergency.status,
           address: emergency.address,

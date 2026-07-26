@@ -32,6 +32,8 @@ export async function GET(request: Request) {
       active: true,
       municipalityId: true,
       municipality: { select: { name: true } },
+      unitId: true,
+      unit: { select: { id: true, label: true } },
       createdAt: true,
       updatedAt: true,
     },
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { name, email, password, role, municipalityId, active, emailOnAssigned, emailOnNewReport } = result.data
+    const { name, email, password, role, municipalityId, unitId, active, emailOnAssigned, emailOnNewReport } = result.data
 
     if (session.role === 'ADMIN') {
       if (!(ADMIN_ASSIGNABLE_ROLES as string[]).includes(role)) {
@@ -84,6 +86,21 @@ export async function POST(request: Request) {
       }
     }
 
+    // Validate unitId belongs to the same municipality (mismo patrón que
+    // closingReasonId en estado/route.ts)
+    if (unitId) {
+      const unit = await prisma.operationalUnit.findUnique({
+        where: { id: unitId },
+        select: { municipalityId: true },
+      })
+      if (!unit || unit.municipalityId !== municipalityId) {
+        return NextResponse.json(
+          { error: 'La unidad operacional no pertenece a esta municipalidad' },
+          { status: 400 }
+        )
+      }
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
       return NextResponse.json({ error: 'Ya existe un usuario con ese email' }, { status: 409 })
@@ -98,12 +115,13 @@ export async function POST(request: Request) {
         password: hashedPassword,
         role,
         municipalityId: municipalityId ?? null,
+        unitId: unitId ?? null,
         active,
         emailOnAssigned: emailOnAssigned ?? true,
         emailOnNewReport: emailOnNewReport ?? true,
       },
       select: {
-        id: true, name: true, email: true, role: true, active: true, municipalityId: true, createdAt: true,
+        id: true, name: true, email: true, role: true, active: true, municipalityId: true, unitId: true, createdAt: true,
       },
     })
 

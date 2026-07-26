@@ -84,7 +84,7 @@ Auto Scaling Group (subredes privadas "app", 2 AZ)
 | `resend_api_key` / `email_enabled` / `google_maps_api_key` | No | `""` / `false` / `""` | Se guardan en SSM Parameter Store |
 | `public_default_municipality_slug` | No | `demo` | Municipalidad usada como fallback en reportes públicos |
 
-Copia `infra/aws/terraform.tfvars.example` a `terraform.tfvars` (gitignored) y completa los valores antes de aplicar.
+Copia `infra/aws/terraform.tfvars.example` a `terraform.tfvars` (gitignored) y completa los valores antes de aplicar. La tabla muestra los defaults de `variables.tf` (`us-east-1`) — el despliegue de producción actual sobreescribe `aws_region`/`azs` a `sa-east-1` (São Paulo, la región más cercana a Chile) vía `terraform.tfvars`.
 
 ### Desplegar o actualizar la infraestructura
 
@@ -109,7 +109,7 @@ El Launch Template clona el repo (`app_repo_url` / `app_repo_branch`), instala d
 
 ### Costo aproximado
 
-Con los valores por defecto (2× `t3.small`, `db.t4g.micro` sin Multi-AZ, `cache.t3.micro`, NAT Gateway único) el costo mensual estimado ronda los **USD 140**, dominado por EC2, NAT Gateway y RDS. Reducir a 1 instancia deseada o eliminar el NAT Gateway (usando solo el S3 Gateway Endpoint) baja el costo a cambio de menor resiliencia.
+Cifra real (Cost Explorer, no una estimación de lista de precios): con los valores actuales (2× `t3.small`, `db.t4g.micro` sin Multi-AZ, `cache.t3.micro`, NAT Gateway único) el costo ronda los **USD 295–350/mes** (con impuesto). El rubro que más pesa no es el cómputo sino **"EC2 - Other"** — NAT Gateway, EBS y transferencia de datos — con ~USD 140/mes por sí solo; le siguen EC2 compute (~USD 49), RDS (~USD 37), ALB (~USD 25), ElastiCache (~USD 23), IPs públicas de VPC (~USD 11) y WAF (~USD 8). Habilitar RDS Multi-AZ o un segundo NAT Gateway (mayor disponibilidad, ver Roadmap) sube el costo; reducir a 1 instancia deseada o eliminar el NAT Gateway (usando solo el S3 Gateway Endpoint) lo baja, a cambio de menor resiliencia.
 
 ## Funcionalidades
 
@@ -176,6 +176,8 @@ Disponible solo para `SUPER_ADMIN`. Incluye:
 - **Detalle de municipalidad** (`/admin/municipalidades/[id]`): 6 KPIs operacionales, distribución por tipo de emergencia, emergencias recientes, gestión de usuarios
 - **Marca** (`/admin/municipalidades/[id]/branding`): logo y color de acento, visibles en las páginas públicas ciudadanas — autogestionable también por el ADMIN de esa municipalidad
 - **Motivos de cierre** (`/admin/municipalidades/[id]/motivos-cierre`): lista configurable por municipio, obligatoria al cerrar una emergencia — autogestionable también por el ADMIN de esa municipalidad
+- **Categorías de emergencia** (`/admin/municipalidades/[id]/categorias`): lista configurable por municipio (reemplaza el enum global fijo), usada al crear/editar emergencias y en el formulario ciudadano — autogestionable también por el ADMIN de esa municipalidad
+- **Unidades operacionales** (`/admin/municipalidades/[id]/unidades`): etiqueta organizativa opcional para agrupar usuarios (ej. Bomberos, Obras Públicas), sin lista por defecto — autogestionable también por el ADMIN de esa municipalidad
 - **Plan y uso** (`/admin/municipalidades/[id]/plan`): plan (Gratuito/Básico/Pro) asignado por SUPER_ADMIN, con barras de uso informativas (emergencias del mes, usuarios activos, almacenamiento) — el ADMIN de esa municipalidad puede verlo, no cambiarlo
 - **Plantillas de correo** (`/admin/municipalidades/[id]/templates`): asunto y cuerpo HTML personalizables por municipalidad para los correos de asignación y de nuevo reporte ciudadano, con variables `{{code}}`, `{{type}}`, `{{link}}`, etc.
 - **Webhook** (`/admin/municipalidades/[id]/webhook`): URL propia por municipalidad, firmada con HMAC-SHA256, con toggle por evento (creación, asignación, nuevo reporte) y botón de prueba
@@ -400,7 +402,7 @@ alerta-comunal/
 ├── prisma/
 │   ├── schema.prisma          # Modelos: Municipality, User, Emergency, Task, Evidence,
 │   │                          # EmergencyCoAssignee, MunicipalityEmailTemplate, MunicipalityWebhook,
-│   │                          # ClosingReason, ActivityLog, AuditLog
+│   │                          # ClosingReason, EmergencyCategory, OperationalUnit, ActivityLog, AuditLog
 │   ├── migrations/
 │   ├── seed.ts                 # Dispatcher: SEED_DEMO=true → seed-demo.ts, si no → seed-production.ts
 │   ├── seed-production.ts      # Modo por defecto: solo crea un SUPER_ADMIN de arranque si no existe ninguno
@@ -419,7 +421,7 @@ alerta-comunal/
 │   │   │   ├── municipios-publicos/ # GET municipalidades activas (público)
 │   │   │   ├── dashboard/           # stats/ (KPIs snapshot) + stream/ (SSE tiempo real)
 │   │   │   ├── health/              # Healthcheck para el target group del ALB
-│   │   │   └── admin/               # CRUD municipalidades, usuarios, branding, motivos de cierre, plan, plantillas, webhook y audit-log
+│   │   │   └── admin/               # CRUD municipalidades, usuarios, branding, motivos de cierre, categorías, unidades, plan, plantillas, webhook y audit-log
 │   │   ├── dashboard/          # Dashboard con estadísticas en tiempo real
 │   │   ├── emergencias/         # Listado, nueva, detalle, editar, reporte PDF
 │   │   ├── mapa/                # Mapa interactivo interno (requiere login)
@@ -641,14 +643,16 @@ Pasos: desplegar este servidor en cualquier lado accesible por `https://` → cr
 - [x] **Branding por municipalidad**: logo + color de acento, visibles en `/reportar/[slug]` y `/mapa-publico/[slug]`; autogestionable por ADMIN de su propia municipalidad o por SUPER_ADMIN
 - [x] **Motivos de cierre configurables por municipalidad**: lista propia por municipio, obligatoria (junto a las observaciones de texto libre) al cerrar una emergencia — aparece en el detalle, el reporte imprimible y el CSV exportado
 - [x] **Planes/límites SaaS informativos**: 3 planes (Gratuito/Básico/Pro) asignados manualmente por SUPER_ADMIN desde `/admin/municipalidades/[id]/plan`, con barras de uso vs. límite (emergencias del mes, usuarios activos, almacenamiento) sin bloquear nada al superarse. El plan Gratuito muestra un badge fijo "Powered by Elemental Pro" (no removible por el ADMIN municipal) en `/reportar/[slug]` y `/mapa-publico/[slug]`; planes pagos lo ocultan. Sin pasarela de pago integrada — el cobro sigue siendo manual.
+- [x] **Rotación de la access key AWS** usada durante el setup inicial de Terraform y **cierre del acceso SSH de depuración** — revocada la regla de ingreso directo por IP en `app-sg`; el acceso real sigue disponible vía SSM Session Manager / EC2 Instance Connect Endpoint, sin exponer el puerto 22 a ninguna IP pública
+- [x] **Corrección del agente de CloudWatch**: apuntaba a los nombres de log sin sufijo de PM2 cluster mode (`alertacomunal-out.log`), que nunca existían porque cada worker escribe con sufijo `-0`/`-1` — corregido a un wildcard (`-out-*.log`/`-error-*.log`) en `user_data.sh.tpl` y aplicado en caliente a las instancias vivas; los logs ya llegan a CloudWatch Logs
+- [x] **Categorías de emergencia configurables por municipalidad** (fase 2 de "Flexibilidad comercial"): reemplaza el enum global fijo `EmergencyType` (11 valores iguales para todas las municipalidades) por `EmergencyCategory`, un modelo por municipalidad administrable en `/admin/municipalidades/[id]/categorias` (mismo patrón que motivos de cierre — activar/desactivar, sin borrado físico). Cada municipalidad nueva arranca con las 11 categorías por defecto; `/reportar/[slug]` usa la lista real de esa municipalidad, `/reportar` sin slug usa una lista genérica de respaldo que el servidor resuelve a la categoría real una vez determinada la municipalidad. El campo `type` original se mantiene solo como dato histórico de solo lectura — ningún formulario nuevo lo escribe.
+- [x] **Unidades operacionales**: etiqueta organizativa opcional para agrupar usuarios dentro de una municipalidad (ej. "Bomberos", "Obras Públicas"), administrable en `/admin/municipalidades/[id]/unidades` (mismo patrón, sin lista por defecto — cada municipalidad arma la suya). Puramente informativa hoy: no afecta permisos ni asignación de emergencias.
 
 ### Corto plazo (próximos sprints)
 
-- [ ] Rotar la access key AWS usada durante el setup inicial de Terraform
-- [ ] Retirar el acceso SSH/EC2 Instance Connect de depuración una vez terminadas las pruebas en producción
+- [ ] **RDS Multi-AZ** (standby síncrono) — hoy `db_multi_az = false`, sin failover automático ante una falla de la instancia o la AZ
+- [ ] **Segundo NAT Gateway** (uno por AZ) — hoy `single_nat_gateway = true`, único punto de falla para la salida a internet de las subredes privadas
 - [ ] Automatizar la política de retención de datos del reportante (job de anonimización + cron en EC2/Terraform — ver sección "Retención de datos")
-- [ ] Categorías de emergencia configurables por municipalidad (además del listado fijo actual) — fase 2 de "Flexibilidad comercial", pendiente por tocar un enum usado en ~15 archivos
-- [ ] Unidades operacionales como etiqueta organizativa de usuarios — fase 2 de "Flexibilidad comercial"
 
 ### Largo plazo
 

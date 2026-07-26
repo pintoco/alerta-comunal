@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuth } from '@/lib/permissions'
 import { getMunicipalityFilter, requireMunicipalityAssigned } from '@/lib/tenant'
+import { getEmergencyCategoryLabel } from '@/lib/utils'
 import type { Session } from '@/types'
 
 export async function GET(request: Request) {
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   const search = searchParams.get('search') || ''
   const status = searchParams.get('status') || ''
   const priority = searchParams.get('priority') || ''
-  const type = searchParams.get('type') || ''
+  const category = searchParams.get('category') || ''
   const sector = searchParams.get('sector') || ''
   const desde = searchParams.get('desde') || ''
   const hasta = searchParams.get('hasta') || ''
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   }
   if (status) where.status = status
   if (priority) where.priority = priority
-  if (type) where.type = type
+  if (category) where.category = { label: { equals: category, mode: 'insensitive' } }
   if (sector) where.sector = { contains: sector, mode: 'insensitive' }
 
   if (desde || hasta) {
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
     include: {
       assignedTo: { select: { name: true } },
       closingReason: { select: { label: true } },
+      category: { select: { label: true } },
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -64,7 +66,7 @@ export async function GET(request: Request) {
   const rows = emergencies.map((e) => [
     e.code,
     e.title,
-    e.type,
+    getEmergencyCategoryLabel(e),
     e.priority,
     e.status,
     e.address,

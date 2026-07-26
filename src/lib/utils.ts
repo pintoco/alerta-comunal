@@ -14,6 +14,10 @@ export function formatRelativeTime(date: string | Date): string {
   return formatDistanceToNow(new Date(date), { locale: es, addSuffix: true })
 }
 
+// Legado: labels del enum EmergencyType original, usado hoy solo como
+// fallback de lectura para emergencias creadas antes de las categorías
+// configurables por municipalidad (ver EmergencyCategory). Ningún formulario
+// nuevo escribe `type` — no agregar valores nuevos acá.
 export const EMERGENCY_TYPE_LABELS: Record<EmergencyType, string> = {
   INCENDIO: 'Incendio',
   INUNDACION: 'Inundación',
@@ -26,6 +30,22 @@ export const EMERGENCY_TYPE_LABELS: Record<EmergencyType, string> = {
   RIESGO_SANITARIO: 'Riesgo sanitario',
   INFRAESTRUCTURA_PUBLICA: 'Infraestructura pública',
   OTRO: 'Otro',
+}
+
+/**
+ * Único punto que resuelve el label de categoría a mostrar: la categoría
+ * configurable por municipalidad si existe, o el label legado de `type` para
+ * emergencias creadas antes de esta migración. Usar esto en vez de leer
+ * `category`/`type` directo, para no volver a duplicar el fallback en cada
+ * pantalla (el problema que esta migración vino a resolver).
+ */
+export function getEmergencyCategoryLabel(e: {
+  category?: { label: string } | null
+  type?: EmergencyType | null
+}): string {
+  if (e.category?.label) return e.category.label
+  if (e.type) return EMERGENCY_TYPE_LABELS[e.type] ?? e.type
+  return 'Sin categoría'
 }
 
 export const PRIORITY_LABELS: Record<Priority, string> = {
@@ -56,20 +76,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   OPERADOR: 'Operador',
   VISUALIZADOR: 'Visualizador',
 }
-
-export const EMERGENCY_TYPES: EmergencyType[] = [
-  'INCENDIO',
-  'INUNDACION',
-  'CAIDA_ARBOL',
-  'CORTE_CAMINO',
-  'CORTE_ELECTRICO',
-  'DANO_VIVIENDA',
-  'EMERGENCIA_SOCIAL',
-  'ACCIDENTE',
-  'RIESGO_SANITARIO',
-  'INFRAESTRUCTURA_PUBLICA',
-  'OTRO',
-]
 
 export const PRIORITIES: Priority[] = ['BAJA', 'MEDIA', 'ALTA', 'CRITICA']
 

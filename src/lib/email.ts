@@ -3,20 +3,6 @@ import { emailConfig, appUrl } from './config'
 import { prisma } from './prisma'
 
 // ── Inline labels (no importa utils para evitar bundling en cliente) ──────────
-const TYPE_LABELS: Record<string, string> = {
-  INCENDIO: 'Incendio',
-  INUNDACION: 'Inundación',
-  CAIDA_ARBOL: 'Caída de árbol',
-  CORTE_CAMINO: 'Corte de camino',
-  CORTE_ELECTRICO: 'Corte eléctrico',
-  DANO_VIVIENDA: 'Daño en vivienda',
-  EMERGENCIA_SOCIAL: 'Emergencia social',
-  ACCIDENTE: 'Accidente',
-  RIESGO_SANITARIO: 'Riesgo sanitario',
-  INFRAESTRUCTURA_PUBLICA: 'Infraestructura pública',
-  OTRO: 'Otro',
-}
-
 const PRIORITY_LABELS: Record<string, string> = {
   BAJA: 'Baja',
   MEDIA: 'Media',
@@ -142,7 +128,8 @@ function applyTemplate(template: string, vars: Record<string, string>): string {
 export interface NewReportEmailData {
   id: string
   code: string
-  type: string
+  /** Ya resuelto por el caller (categoría de la municipalidad, o el label legado de `type`). */
+  categoryLabel: string | null
   priority: string
   status: string
   region?: string | null
@@ -176,7 +163,7 @@ export async function sendMunicipalityNewReportEmail(
   if (customTpl) {
     const vars: Record<string, string> = {
       code: data.code,
-      type: toLabel(TYPE_LABELS, data.type),
+      type: data.categoryLabel ?? 'Sin categoría',
       priority: toLabel(PRIORITY_LABELS, data.priority),
       status: toLabel(STATUS_LABELS, data.status),
       region: data.region ?? '',
@@ -210,7 +197,7 @@ export async function sendMunicipalityNewReportEmail(
   </div>
 
   <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
-    ${emailRow('Tipo', toLabel(TYPE_LABELS, data.type))}
+    ${emailRow('Tipo', data.categoryLabel ?? 'Sin categoría')}
     ${emailRow('Prioridad', toLabel(PRIORITY_LABELS, data.priority))}
     ${emailRow('Estado', toLabel(STATUS_LABELS, data.status))}
     ${emailRow('Región', data.region)}
@@ -236,7 +223,7 @@ ${emailFooter()}`
   const text = [
     'NUEVO REPORTE CIUDADANO — AlertaComunal',
     `Código: ${data.code}`,
-    `Tipo: ${toLabel(TYPE_LABELS, data.type)}`,
+    `Tipo: ${data.categoryLabel ?? 'Sin categoría'}`,
     `Prioridad: ${toLabel(PRIORITY_LABELS, data.priority)}`,
     `Estado: ${toLabel(STATUS_LABELS, data.status)}`,
     data.region ? `Región: ${data.region}` : '',
@@ -261,7 +248,8 @@ ${emailFooter()}`
 export interface AssignmentEmailData {
   id: string
   code: string
-  type: string
+  /** Ya resuelto por el caller (categoría de la municipalidad, o el label legado de `type`). */
+  categoryLabel: string | null
   priority: string
   status: string
   region?: string | null
@@ -283,7 +271,7 @@ export async function sendEmergencyAssignmentEmail(
   if (customTpl) {
     const vars: Record<string, string> = {
       code: data.code,
-      type: toLabel(TYPE_LABELS, data.type),
+      type: data.categoryLabel ?? 'Sin categoría',
       priority: toLabel(PRIORITY_LABELS, data.priority),
       status: toLabel(STATUS_LABELS, data.status),
       region: data.region ?? '',
@@ -316,7 +304,7 @@ export async function sendEmergencyAssignmentEmail(
   </div>
 
   <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
-    ${emailRow('Tipo', toLabel(TYPE_LABELS, data.type))}
+    ${emailRow('Tipo', data.categoryLabel ?? 'Sin categoría')}
     ${emailRow('Prioridad', toLabel(PRIORITY_LABELS, data.priority))}
     ${emailRow('Estado', toLabel(STATUS_LABELS, data.status))}
     ${emailRow('Región', data.region)}
@@ -340,7 +328,7 @@ ${emailFooter()}`
     'EMERGENCIA ASIGNADA — AlertaComunal',
     data.assignedByName ? `Asignado por: ${data.assignedByName}` : '',
     `Código: ${data.code}`,
-    `Tipo: ${toLabel(TYPE_LABELS, data.type)}`,
+    `Tipo: ${data.categoryLabel ?? 'Sin categoría'}`,
     `Prioridad: ${toLabel(PRIORITY_LABELS, data.priority)}`,
     `Estado: ${toLabel(STATUS_LABELS, data.status)}`,
     data.region ? `Región: ${data.region}` : '',

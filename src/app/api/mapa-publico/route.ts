@@ -49,6 +49,7 @@ export async function GET(request: Request) {
       code: true,
       title: true,
       type: true,
+      category: { select: { id: true, label: true } },
       priority: true,
       status: true,
       address: true,

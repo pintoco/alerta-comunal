@@ -5,9 +5,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { userCreateSchema, userUpdateSchema } from '@/lib/validations/user'
 import type { z } from 'zod'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type Municipality = { id: string; name: string }
+type OperationalUnit = { id: string; label: string }
 type CreateValues = z.infer<typeof userCreateSchema>
 type UpdateValues = z.infer<typeof userUpdateSchema>
 
@@ -23,6 +24,25 @@ const LIMITED_ROLES = [
   { value: 'VISUALIZADOR', label: 'Visualizador' },
 ] as const
 
+// Unidades operacionales de la municipalidad efectiva (fija para ADMIN, o la
+// que SUPER_ADMIN tenga seleccionada en el <select> en ese momento) — se
+// vuelve a pedir cada vez que esa municipalidad cambia.
+function useOperationalUnits(municipalityId: string | null | undefined): OperationalUnit[] {
+  const [units, setUnits] = useState<OperationalUnit[]>([])
+
+  useEffect(() => {
+    if (!municipalityId) { setUnits([]); return }
+    fetch(`/api/admin/municipalidades/${municipalityId}/unidades`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: Array<OperationalUnit & { active: boolean }>) =>
+        setUnits(data.filter((u) => u.active).map(({ id, label }) => ({ id, label })))
+      )
+      .catch(() => setUnits([]))
+  }, [municipalityId])
+
+  return units
+}
+
 // ─── Shared field block ───────────────────────────────────────────────────────
 
 function FormFields({
@@ -33,6 +53,7 @@ function FormFields({
   showPassword,
   roles,
   lockedMunicipalityId,
+  units,
 }: {
   register: any
   errors: any
@@ -41,6 +62,7 @@ function FormFields({
   showPassword: boolean
   roles: readonly { value: string; label: string }[]
   lockedMunicipalityId?: string | null
+  units: OperationalUnit[]
 }) {
   const lockedMun = lockedMunicipalityId
     ? municipalities.find((m) => m.id === lockedMunicipalityId)
@@ -102,6 +124,17 @@ function FormFields({
           <p className="text-xs text-red-500 mt-1">{errors.municipalityId.message}</p>
         )}
       </div>
+      {units.length > 0 && (
+        <div>
+          <label className="form-label">Unidad operacional</label>
+          <select {...register('unitId')} className="form-input">
+            <option value="">Sin asignar</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <input type="checkbox" id="active" {...register('active')} className="w-4 h-4 rounded" />
         <label htmlFor="active" className="text-sm text-gray-700">Usuario activo</label>
@@ -153,6 +186,7 @@ function CreateUserForm({
       password: '',
       role: 'OPERADOR',
       municipalityId: lockedMunicipalityId ?? null,
+      unitId: null,
       active: true,
       emailOnAssigned: true,
       emailOnNewReport: true,
@@ -161,6 +195,8 @@ function CreateUserForm({
 
   const selectedRole = watch('role')
   const municipalityRequired = ['ADMIN', 'OPERADOR', 'VISUALIZADOR'].includes(selectedRole)
+  const effectiveMunicipalityId = lockedMunicipalityId ?? watch('municipalityId')
+  const units = useOperationalUnits(effectiveMunicipalityId)
 
   const onSubmit = async (data: CreateValues) => {
     setError(null)
@@ -194,6 +230,7 @@ function CreateUserForm({
         showPassword
         roles={roles}
         lockedMunicipalityId={lockedMunicipalityId}
+        units={units}
       />
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={isSubmitting} className="btn-primary text-sm disabled:opacity-50">
@@ -222,6 +259,7 @@ function EditUserForm({
     email: string
     role: string
     municipalityId: string | null
+    unitId?: string | null
     active: boolean
     emailOnAssigned: boolean
     emailOnNewReport: boolean
@@ -244,6 +282,7 @@ function EditUserForm({
       email: initialData.email,
       role: initialData.role as UpdateValues['role'],
       municipalityId: lockedMunicipalityId ?? initialData.municipalityId,
+      unitId: initialData.unitId ?? null,
       active: initialData.active,
       emailOnAssigned: initialData.emailOnAssigned,
       emailOnNewReport: initialData.emailOnNewReport,
@@ -254,6 +293,8 @@ function EditUserForm({
   const municipalityRequired = selectedRole
     ? ['ADMIN', 'OPERADOR', 'VISUALIZADOR'].includes(selectedRole)
     : false
+  const effectiveMunicipalityId = lockedMunicipalityId ?? watch('municipalityId')
+  const units = useOperationalUnits(effectiveMunicipalityId)
 
   const onSubmit = async (data: UpdateValues) => {
     setError(null)
@@ -318,6 +359,7 @@ function EditUserForm({
         showPassword={false}
         roles={roles}
         lockedMunicipalityId={lockedMunicipalityId}
+        units={units}
       />
 
       <div className="border-t border-gray-100 pt-4">
@@ -380,6 +422,7 @@ type Props =
         email: string
         role: string
         municipalityId: string | null
+        unitId?: string | null
         active: boolean
         emailOnAssigned: boolean
         emailOnNewReport: boolean

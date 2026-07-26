@@ -1,19 +1,5 @@
 import { z } from 'zod'
 
-const EMERGENCY_TYPES = [
-  'INCENDIO',
-  'INUNDACION',
-  'CAIDA_ARBOL',
-  'CORTE_CAMINO',
-  'CORTE_ELECTRICO',
-  'DANO_VIVIENDA',
-  'EMERGENCIA_SOCIAL',
-  'ACCIDENTE',
-  'RIESGO_SANITARIO',
-  'INFRAESTRUCTURA_PUBLICA',
-  'OTRO',
-] as const
-
 const phoneSchema = z
   .string()
   .min(7, 'Teléfono debe tener al menos 7 caracteres')
@@ -39,7 +25,7 @@ const dateStringSchema = z
 export const emergencySchema = z.object({
   title: z.string().min(3, 'El título debe tener al menos 3 caracteres').max(200),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
-  type: z.enum(EMERGENCY_TYPES),
+  categoryId: z.string().min(1, 'Debes seleccionar una categoría'),
   priority: z.enum(['BAJA', 'MEDIA', 'ALTA', 'CRITICA']),
   status: z.enum(['NUEVA', 'EN_ATENCION', 'RESUELTA', 'CERRADA', 'DESCARTADA']).optional(),
   address: z.string().min(5, 'La dirección debe tener al menos 5 caracteres').max(300),
@@ -67,7 +53,12 @@ export const publicReportSchema = z
       .min(7, 'Teléfono debe tener al menos 7 caracteres')
       .max(20)
       .regex(/^[+\d\s\-()]+$/, 'Formato de teléfono inválido'),
-    type: z.enum(EMERGENCY_TYPES),
+    // categoryId: municipalidad conocida client-side (/reportar/[slug]), envía el id real.
+    // category: municipalidad no conocida aún (/reportar sin slug), envía el label de una
+    // lista genérica de respaldo — el servidor lo resuelve a un categoryId real una vez
+    // determinada la municipalidad (ver POST /api/reporte-publico).
+    categoryId: z.string().optional(),
+    category: z.string().min(1).max(100).optional(),
     description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres'),
     address: z.string().min(5, 'La dirección debe tener al menos 5 caracteres').max(300),
     sector: z.string().max(100).optional(),
@@ -83,6 +74,10 @@ export const publicReportSchema = z
   .refine((data) => !data.commune || !!data.region, {
     message: 'Debe seleccionar una región antes de seleccionar una comuna.',
     path: ['commune'],
+  })
+  .refine((data) => !!data.categoryId || !!data.category, {
+    message: 'Debes seleccionar un tipo de emergencia',
+    path: ['category'],
   })
 
 export type PublicReportFormData = z.infer<typeof publicReportSchema>

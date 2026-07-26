@@ -47,6 +47,14 @@ export default async function EditarEmergenciaPage({
     orderBy: { name: 'asc' },
   })
 
+  const categories = emergencyRest.municipalityId
+    ? await prisma.emergencyCategory.findMany({
+        where: { municipalityId: emergencyRest.municipalityId, active: true },
+        select: { id: true, label: true },
+        orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      })
+    : []
+
   return (
     <MainLayout>
       <div className="max-w-4xl mx-auto">
@@ -57,6 +65,7 @@ export default async function EditarEmergenciaPage({
 
         <EmergencyForm
           users={users}
+          categories={categories}
           initial={emergency as any}
           isEdit
         />

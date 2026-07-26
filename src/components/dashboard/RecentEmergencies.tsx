@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { Emergency } from '@/types'
-import { EMERGENCY_TYPE_LABELS, formatRelativeTime } from '@/lib/utils'
+import { getEmergencyCategoryLabel, formatRelativeTime } from '@/lib/utils'
 import StatusBadge from '@/components/emergencies/StatusBadge'
 import PriorityBadge from '@/components/emergencies/PriorityBadge'
 
@@ -39,7 +39,7 @@ export default function RecentEmergencies({ emergencies }: { emergencies: Emerge
                   {e.title}
                 </Link>
               </td>
-              <td className="py-3 px-4 text-gray-600">{EMERGENCY_TYPE_LABELS[e.type]}</td>
+              <td className="py-3 px-4 text-gray-600">{getEmergencyCategoryLabel(e)}</td>
               <td className="py-3 px-4">
                 <StatusBadge status={e.status} />
               </td>

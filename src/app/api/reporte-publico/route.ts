@@ -11,6 +11,7 @@ import {
 } from '@/lib/email'
 import { sendWebhook } from '@/lib/webhooks'
 import { checkRateLimit, getClientIpFromRequest } from '@/lib/rate-limit'
+import { getEmergencyCategoryLabel } from '@/lib/utils'
 
 async function verifyTurnstileToken(token: string, ip: string): Promise<boolean> {
   try {
@@ -56,6 +57,7 @@ export async function GET(request: Request) {
     select: {
       code: true,
       type: true,
+      category: { select: { label: true } },
       status: true,
       priority: true,
       address: true,
@@ -75,7 +77,9 @@ export async function GET(request: Request) {
     )
   }
 
-  return NextResponse.json(emergency)
+  // Nunca exponer el id interno de la categoría, solo el label.
+  const { type, category, ...rest } = emergency
+  return NextResponse.json({ ...rest, categoryLabel: getEmergencyCategoryLabel({ type, category }) })
 }
 
 // ─── POST /api/reporte-publico ────────────────────────────────────────────────
@@ -123,7 +127,8 @@ export async function POST(request: Request) {
     const body = {
       reporterName: formData.get('reporterName') as string,
       reporterPhone: formData.get('reporterPhone') as string,
-      type: formData.get('type') as string,
+      categoryId: (formData.get('categoryId') as string) || undefined,
+      category: (formData.get('category') as string) || undefined,
       description: formData.get('description') as string,
       address: formData.get('address') as string,
       sector: (formData.get('sector') as string) || undefined,
@@ -233,6 +238,34 @@ export async function POST(request: Request) {
       }
     }
 
+    // ── Resolver categoría: id real si vino de /reportar/[slug], o el mejor
+    // match por label si vino del formulario sin slug (ver publicReportSchema
+    // y ReportarForm.tsx) — recién ahora que municipalityId está resuelto ──
+    let resolvedCategoryId: string | null = null
+    let resolvedCategoryLabel: string | null = null
+    if (municipalityId) {
+      if (data.categoryId) {
+        const cat = await prisma.emergencyCategory.findUnique({ where: { id: data.categoryId } })
+        if (!cat || cat.municipalityId !== municipalityId || !cat.active) {
+          return NextResponse.json(
+            {
+              error:
+                'La categoría seleccionada ya no está disponible. Recarga la página e intenta nuevamente.',
+            },
+            { status: 400 }
+          )
+        }
+        resolvedCategoryId = cat.id
+        resolvedCategoryLabel = cat.label
+      } else if (data.category) {
+        const cat = await prisma.emergencyCategory.findFirst({
+          where: { municipalityId, active: true, label: { equals: data.category, mode: 'insensitive' } },
+        })
+        resolvedCategoryId = cat?.id ?? null
+        resolvedCategoryLabel = cat?.label ?? data.category
+      }
+    }
+
     // ── Crear emergencia con retry ante colisión de código o token ────────────
     const code = await generateEmergencyCode()
     const publicToken = generatePublicToken()
@@ -248,9 +281,9 @@ export async function POST(request: Request) {
           data: {
             code: attemptCode,
             publicToken: attemptToken,
-            title: `Reporte ciudadano: ${data.type}`,
+            title: `Reporte ciudadano: ${resolvedCategoryLabel ?? 'Sin categoría'}`,
             description: data.description,
-            type: data.type,
+            categoryId: resolvedCategoryId,
             priority: 'MEDIA',
             status: 'NUEVA',
             address: data.address,
@@ -360,7 +393,7 @@ export async function POST(request: Request) {
             {
               id: emergency.id,
               code: emergency.code,
-              type: emergency.type,
+              categoryLabel: resolvedCategoryLabel,
               priority: emergency.priority,
               status: emergency.status,
               region: emergency.region,
@@ -405,7 +438,7 @@ export async function POST(request: Request) {
         emergency: {
           id: emergency.id,
           code: emergency.code,
-          type: emergency.type,
+          category: resolvedCategoryLabel,
           priority: emergency.priority,
           status: emergency.status,
           region: emergency.region,

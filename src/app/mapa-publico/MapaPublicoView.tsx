@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { EMERGENCY_TYPE_LABELS, STATUS_LABELS } from '@/lib/utils'
+import { getEmergencyCategoryLabel, STATUS_LABELS } from '@/lib/utils'
 import type { Emergency } from '@/types'
 import { PLAN_LIMITS, type SubscriptionPlanId } from '@/lib/plans'
 import { companyBrandingConfig } from '@/lib/config'
@@ -247,7 +247,7 @@ export default function MapaPublicoView({ municipalitySlug, defaultSlug }: MapaP
                       <span className="font-medium text-gray-900 truncate">{em.title}</span>
                     </div>
                     <p className="text-gray-500 text-xs mt-0.5 truncate">
-                      {EMERGENCY_TYPE_LABELS[em.type]} · {em.address}
+                      {getEmergencyCategoryLabel(em)} · {em.address}
                       {em.sector ? ` · ${em.sector}` : ''}
                     </p>
                   </div>

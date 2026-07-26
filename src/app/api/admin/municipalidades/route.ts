@@ -14,6 +14,24 @@ const DEFAULT_CLOSING_REASONS = [
   'Otro',
 ]
 
+// Categorías de emergencia por defecto — mismos labels del enum EmergencyType
+// legado, para que ninguna municipalidad nueva arranque sin opciones. Cada
+// una puede editar/agregar/desactivar las suyas desde
+// /admin/municipalidades/[id]/categorias.
+const DEFAULT_EMERGENCY_CATEGORIES = [
+  'Incendio',
+  'Inundación',
+  'Caída de árbol',
+  'Corte de camino',
+  'Corte eléctrico',
+  'Daño en vivienda',
+  'Emergencia social',
+  'Accidente',
+  'Riesgo sanitario',
+  'Infraestructura pública',
+  'Otro',
+]
+
 export async function GET() {
   const session = await requireSuperAdmin()
   if (session instanceof NextResponse) return session
@@ -56,6 +74,14 @@ export async function POST(request: Request) {
 
     await prisma.closingReason.createMany({
       data: DEFAULT_CLOSING_REASONS.map((label, order) => ({
+        municipalityId: municipality.id,
+        label,
+        order,
+      })),
+    })
+
+    await prisma.emergencyCategory.createMany({
+      data: DEFAULT_EMERGENCY_CATEGORIES.map((label, order) => ({
         municipalityId: municipality.id,
         label,
         order,

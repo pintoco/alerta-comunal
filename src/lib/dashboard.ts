@@ -14,7 +14,7 @@ export interface DashboardData {
   closedLast7days: number
   resolvedPercent: number
   avgClosureDays: number | null
-  byType: Array<{ type: string; count: number }>
+  byCategory: Array<{ label: string; count: number }>
   byPriority: Array<{ priority: string; count: number }>
   recent: Array<{
     id: string
@@ -22,7 +22,8 @@ export interface DashboardData {
     title: string
     status: string
     priority: string
-    type: string
+    type: string | null
+    category: { id: string; label: string } | null
     address: string
     createdAt: Date
     assignedTo: { id: string; name: string; email: string; role: string; active: boolean; createdAt: Date; updatedAt: Date } | null
@@ -41,7 +42,7 @@ export async function getDashboardData(session: Session): Promise<DashboardData>
       total: 0, nueva: 0, enAtencion: 0, resuelta: 0, cerrada: 0, descartada: 0,
       critica: 0, last7days: 0, closedLast7days: 0, resolvedPercent: 0,
       avgClosureDays: null,
-      byType: [],
+      byCategory: [],
       byPriority: [],
       recent: [],
       noMunicipality: true,
@@ -66,10 +67,9 @@ export async function getDashboardData(session: Session): Promise<DashboardData>
       where: { ...scope, closedAt: { gte: sevenDaysAgo, not: null } },
     }),
     prisma.emergency.groupBy({
-      by: ['type'],
+      by: ['categoryId'],
       where: scope,
       _count: { _all: true },
-      orderBy: { _count: { type: 'desc' } },
     }),
     prisma.emergency.groupBy({
       by: ['priority'],
@@ -90,9 +90,33 @@ export async function getDashboardData(session: Session): Promise<DashboardData>
         assignedTo: {
           select: { id: true, name: true, email: true, role: true, active: true, createdAt: true, updatedAt: true },
         },
+        category: { select: { id: true, label: true } },
       },
     }),
   ])
+
+  // groupBy no permite incluir la relación — se busca el label de cada
+  // categoryId aparte. Dos municipalidades distintas pueden tener una
+  // categoría con el mismo label ("Incendio"): se fusionan en una sola
+  // entrada por texto (no-op cuando el scope ya es una sola municipalidad).
+  const categoryIds = byTypeRaw
+    .map((r) => r.categoryId)
+    .filter((id): id is string => !!id)
+  const categoryRows = categoryIds.length
+    ? await prisma.emergencyCategory.findMany({
+        where: { id: { in: categoryIds } },
+        select: { id: true, label: true },
+      })
+    : []
+  const labelById = new Map(categoryRows.map((c) => [c.id, c.label]))
+  const countByLabel = new Map<string, number>()
+  for (const r of byTypeRaw) {
+    const label = r.categoryId ? (labelById.get(r.categoryId) ?? 'Sin categoría') : 'Sin categoría'
+    countByLabel.set(label, (countByLabel.get(label) ?? 0) + r._count._all)
+  }
+  const byCategory = Array.from(countByLabel, ([label, count]) => ({ label, count })).sort(
+    (a, b) => b.count - a.count
+  )
 
   const resolvedPercent = total > 0 ? Math.round(((resuelta + cerrada) / total) * 100) : 0
 
@@ -108,7 +132,7 @@ export async function getDashboardData(session: Session): Promise<DashboardData>
   return {
     total, nueva, enAtencion, resuelta, cerrada, descartada, critica,
     last7days, closedLast7days, resolvedPercent, avgClosureDays,
-    byType: byTypeRaw.map((r) => ({ type: r.type, count: r._count._all })),
+    byCategory,
     byPriority: byPriorityRaw.map((r) => ({ priority: r.priority, count: r._count._all })),
     recent,
     noMunicipality: false,
