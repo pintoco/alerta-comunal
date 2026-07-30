@@ -34,16 +34,16 @@ export default async function EditarEmergenciaPage({
     redirect('/emergencias')
   }
 
-  // Usuarios filtrados por la municipalidad de LA EMERGENCIA, no por la del
-  // usuario logueado — un SUPER_ADMIN no tiene municipalidad propia
-  // (session.municipalityId es null), así que filtrar por su sesión nunca
-  // aplicaba ningún filtro y mostraba usuarios de todas las municipalidades
-  // como responsable/co-responsables. Para ADMIN/OPERADOR da el mismo
-  // resultado que antes, ya que canAccessEmergency ya garantiza que
-  // emergencyRest.municipalityId === session.municipalityId para ellos.
+  // SUPER_ADMIN ve todos los usuarios de todas las municipalidades (sin
+  // filtro). El resto de roles se restringe a la municipalidad de LA
+  // EMERGENCIA (canAccessEmergency ya garantiza que coincide con la suya) y
+  // además nunca debe ver al SUPER_ADMIN como opción de responsable/
+  // co-responsable — no gestiona emergencias ni pertenece a ninguna
+  // municipalidad.
   const usersWhere: Record<string, unknown> = { active: true }
-  if (emergencyRest.municipalityId) {
+  if (session.role !== 'SUPER_ADMIN') {
     usersWhere.municipalityId = emergencyRest.municipalityId
+    usersWhere.role = { not: 'SUPER_ADMIN' }
   }
 
   const users = await prisma.user.findMany({
