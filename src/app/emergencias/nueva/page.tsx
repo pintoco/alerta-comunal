@@ -11,9 +11,23 @@ export default async function NuevaEmergenciaPage() {
   if (!session) redirect('/login')
   if (session.role === 'VISUALIZADOR') redirect('/dashboard')
 
+  // Misma resolución de municipalidad que usa POST /api/emergencias: la
+  // sesión, o "demo" para SUPER_ADMIN (que no tiene municipalidad propia) —
+  // tanto los usuarios asignables como las categorías mostradas deben ser
+  // los de la municipalidad donde la emergencia realmente va a quedar
+  // creada. Antes se filtraba por session.municipalityId excluyendo
+  // explícitamente a SUPER_ADMIN, que por no tener municipalidad propia
+  // terminaba viendo usuarios de todas las municipalidades como
+  // responsable/co-responsables.
+  let effectiveMunicipalityId = session.municipalityId ?? null
+  if (!effectiveMunicipalityId && session.role === 'SUPER_ADMIN') {
+    const demo = await prisma.municipality.findFirst({ where: { slug: 'demo' }, select: { id: true } })
+    effectiveMunicipalityId = demo?.id ?? null
+  }
+
   const usersWhere: Record<string, unknown> = { active: true }
-  if (session.role !== 'SUPER_ADMIN' && session.municipalityId) {
-    usersWhere.municipalityId = session.municipalityId
+  if (effectiveMunicipalityId) {
+    usersWhere.municipalityId = effectiveMunicipalityId
   }
 
   const users = await prisma.user.findMany({
@@ -21,16 +35,6 @@ export default async function NuevaEmergenciaPage() {
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   })
-
-  // Misma resolución de municipalidad que usa POST /api/emergencias: la
-  // sesión, o "demo" para SUPER_ADMIN (que no tiene municipalidad propia) —
-  // las categorías mostradas deben ser las de la municipalidad donde la
-  // emergencia realmente va a quedar creada.
-  let effectiveMunicipalityId = session.municipalityId ?? null
-  if (!effectiveMunicipalityId && session.role === 'SUPER_ADMIN') {
-    const demo = await prisma.municipality.findFirst({ where: { slug: 'demo' }, select: { id: true } })
-    effectiveMunicipalityId = demo?.id ?? null
-  }
 
   const categories = effectiveMunicipalityId
     ? await prisma.emergencyCategory.findMany({

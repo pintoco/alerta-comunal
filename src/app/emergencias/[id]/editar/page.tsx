@@ -3,7 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import MainLayout from '@/components/layout/MainLayout'
 import EmergencyForm from '@/components/emergencies/EmergencyForm'
-import { canAccessEmergency, getEmergencyScope } from '@/lib/tenant'
+import { canAccessEmergency } from '@/lib/tenant'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,11 +34,16 @@ export default async function EditarEmergenciaPage({
     redirect('/emergencias')
   }
 
-  // Usuarios filtrados por municipalidad del usuario (ADMIN ve todos)
-  const scope = getEmergencyScope(session)
+  // Usuarios filtrados por la municipalidad de LA EMERGENCIA, no por la del
+  // usuario logueado — un SUPER_ADMIN no tiene municipalidad propia
+  // (session.municipalityId es null), así que filtrar por su sesión nunca
+  // aplicaba ningún filtro y mostraba usuarios de todas las municipalidades
+  // como responsable/co-responsables. Para ADMIN/OPERADOR da el mismo
+  // resultado que antes, ya que canAccessEmergency ya garantiza que
+  // emergencyRest.municipalityId === session.municipalityId para ellos.
   const usersWhere: Record<string, unknown> = { active: true }
-  if (scope !== false && Object.keys(scope).length > 0) {
-    usersWhere.municipalityId = session.municipalityId
+  if (emergencyRest.municipalityId) {
+    usersWhere.municipalityId = emergencyRest.municipalityId
   }
 
   const users = await prisma.user.findMany({
